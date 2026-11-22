@@ -52,6 +52,9 @@ button.dim{color:#666;border-color:#2a2a2a}
 <div class="bot">
   <canvas id="spec"></canvas>
   <div id="msg"></div>
+  <div class="row">
+    <button id="sonar">SONAR OFF</button><button id="layP" class="on">PASSIVE</button><button id="layS" class="on">ECHO</button>
+  </div>
   <div class="row" id="bands">
     <button class="on" data-b="0">LOW</button><button class="on" data-b="1">MID</button><button class="on" data-b="2">HIGH</button><button class="on" data-b="3">ULTRA</button>
   </div>
@@ -85,6 +88,70 @@ const bandOn = [true,true,true,true];
 const SENS = [{t:6,k:9},{t:4,k:6},{t:2.5,k:4}]; // threshold dB above floor, dB per particle
 let sensIdx = 1;
 
+// ==SONAR-DSP-BEGIN==
+// Active sonar, near-ultrasonic coded chirps. Pure functions (unit-tested offline).
+const SON = {f0:17500, f1:20500, dur:0.008, maxR:4.0, gMinMs:2.5, gMaxMs:30, N:6, codeRatio:1.5, oobMax:4, interval:0.34, gain:0.22, pre:0.1, post:0.3};
+const SON_CODES = ['UP','DOWN','V'];
+function makeChirp(code, sr){
+  const n=Math.round(SON.dur*sr), out=new Float32Array(n); let ph=0; const B=SON.f1-SON.f0;
+  for(let i=0;i<n;i++){ const u=i/(n-1);
+    const f = code===0 ? SON.f0+B*u : code===1 ? SON.f1-B*u : (u<0.5 ? SON.f0+B*2*u : SON.f1-B*(2*u-1));
+    ph+=2*Math.PI*f/sr; out[i]=Math.sin(ph)*0.5*(1-Math.cos(2*Math.PI*u)); }
+  return out;
+}
+function biquad(type,f,Q,sr){ // RBJ cookbook
+  const w=2*Math.PI*f/sr, c=Math.cos(w), al=Math.sin(w)/(2*Q); let b0,b1,b2;
+  if(type==='lp'){ b0=(1-c)/2; b1=1-c; b2=(1-c)/2; } else { b0=(1+c)/2; b1=-(1+c); b2=(1+c)/2; }
+  const a0=1+al; return [b0/a0,b1/a0,b2/a0,(-2*c)/a0,(1-al)/a0];
+}
+const BW8_Q=[0.5098,0.6013,0.9000,2.5629]; // 8th-order Butterworth sections
+function makeBand(sr){ const hi=Math.min(SON.f1+500, sr/2*0.96), s=[];
+  for(const q of BW8_Q) s.push(biquad('hp',SON.f0-500,q,sr)); for(const q of BW8_Q) s.push(biquad('lp',hi,q,sr)); return s; }
+function makeOob(sr){ const s=[]; for(const q of BW8_Q) s.push(biquad('lp',15000,q,sr)); return s; }
+function filt(x,secs){ let y=Float32Array.from(x);
+  for(const [b0,b1,b2,a1,a2] of secs){ let x1=0,x2=0,y1=0,y2=0; for(let i=0;i<y.length;i++){ const v=y[i], o=b0*v+b1*x1+b2*x2-a1*y1-a2*y2; x2=x1;x1=v;y2=y1;y1=o;y[i]=o; } }
+  return y; }
+function corrAt(x,t,L){ let s=0; for(let k=0;k<t.length;k++) s+=x[L+k]*t[k]; return s; }
+function corrEnv(x,t,a,b){ // |matched filter| envelope for lags a..b-1
+  a=Math.max(0,a); b=Math.min(x.length-t.length,b); const n=Math.max(0,b-a), c=new Float32Array(n), e=new Float32Array(n);
+  for(let i=0;i<n;i++) c[i]=Math.abs(corrAt(x,t,a+i));
+  for(let i=0;i<n;i++){ let m=0; for(let j=Math.max(0,i-3);j<=Math.min(n-1,i+3);j++) if(c[j]>m) m=c[j]; e[i]=m; }
+  return {a,e};
+}
+function energy(x,a,b){ let s=0; a=Math.max(0,a); b=Math.min(x.length,b); for(let i=a;i<b;i++) s+=x[i]*x[i]; return s/Math.max(1,b-a); }
+// raw: mic samples from (emit - pre) to (emit + post). Returns accepted echo peaks or a rejection reason.
+function detectPing(raw, code, tpls, secs, sr){
+  if(!secs.tf){ secs.tf=tpls.map(t=>{ const z=new Float32Array(t.length+64); z.set(t); return filt(z,secs); }); } // templates through the same filter
+  tpls=secs.tf; const x=filt(raw,secs), tpl=tpls[code], emit=Math.round(SON.pre*sr);
+  const ds=corrEnv(x,tpl,emit-Math.round(0.01*sr),emit+Math.round(0.25*sr));
+  let D=0,d=-1; for(let i=0;i<ds.e.length;i++) if(ds.e[i]>D){D=ds.e[i];d=ds.a+i;}
+  const nA=d-Math.round(0.06*sr), nB=d-Math.round(0.01*sr);
+  if(d<0||nA<0) return {ok:false,reason:'no direct path'};
+  const ns=corrEnv(x,tpl,nA,nB); let fl=0; for(const v of ns.e) fl+=v*v; fl=Math.sqrt(fl/Math.max(1,ns.e.length))+1e-9;
+  if(D<10*fl) return {ok:false,reason:'no direct path',D,floor:fl};
+  { let bd=d,bv=0; for(let k=-4;k<=4;k++){ const v=Math.abs(corrAt(x,tpl,d+k)); if(v>bv){bv=v;bd=k+d;} } d=bd; // subtract direct path
+    let te=0; for(const v of tpl) te+=v*v; const a=corrAt(x,tpl,d)/te; for(let k=0;k<tpl.length;k++) x[d+k]-=a*tpl[k]; }
+  const gA=d+Math.round(SON.gMinMs/1000*sr), gB=d+Math.round(SON.gMaxMs/1000*sr);
+  // broadband / impulsive rejection: out-of-band energy jump inside the echo window
+  const oob=filt(raw,secs.oob||(secs.oob=makeOob(sr)));
+  const oobRatio=energy(oob,gA,gB+tpl.length)/(energy(oob,nA,nB)+1e-12);
+  if(oobRatio>SON.oobMax) return {ok:false,reason:'impulse/broadband',oobRatio};
+  const g=corrEnv(x,tpl,gA,gB), thr=Math.max(SON.N*fl, 0.012*D), nms=Math.round(0.0006*sr), peaks=[];
+  for(let i=1;i<g.e.length-1;i++){ const v=g.e[i]; if(v<thr||v<g.e[i-1]||v<g.e[i+1]) continue;
+    const L=g.a+i; if(peaks.length&&L-peaks[peaks.length-1].L<nms){ if(v>peaks[peaks.length-1].v) peaks[peaks.length-1]={L,v}; continue; } peaks.push({L,v}); }
+  const out=[];
+  for(const p of peaks){ // code check: echo must match THIS ping's code, not another sweep
+    let own=0, other=0;
+    for(let k=-3;k<=3;k++) own=Math.max(own,Math.abs(corrAt(x,tpl,p.L+k)));
+    const nb=Math.round(0.0033*sr); for(let k=-nb;k<=nb;k+=1) for(let c=0;c<tpls.length;c++) if(c!==code&&p.L+k>=0) other=Math.max(other,Math.abs(corrAt(x,tpls[c],p.L+k)));
+    if(own<SON.codeRatio*other) continue;
+    out.push({r:(p.L-d)/sr*343/2, snr:p.v/fl});
+  }
+  out.sort((a,b)=>b.snr-a.snr);
+  return {ok:true, peaks:out.slice(0,4), D, floor:fl, oobRatio};
+}
+// ==SONAR-DSP-END==
+
 // ---------- state ----------
 const S = {
   running:false, t0:performance.now(),
@@ -104,10 +171,10 @@ renderer.setPixelRatio(DPR);
 
 const geo = new THREE.BufferGeometry();
 const aData = new Float32Array(CAP*4);   // heading(rad), elev(rad), r2d, r3d
-const aMeta = new Float32Array(CAP*2);   // birth(s), intensity*shade
-for(let i=0;i<CAP;i++) aMeta[i*2] = -1e6;
+const aMeta = new Float32Array(CAP*3);   // birth(s), intensity, layer (0 passive haze, 1 sonar echo)
+for(let i=0;i<CAP;i++) aMeta[i*3] = -1e6;
 const attrData = new THREE.BufferAttribute(aData,4).setUsage(THREE.DynamicDrawUsage);
-const attrMeta = new THREE.BufferAttribute(aMeta,2).setUsage(THREE.DynamicDrawUsage);
+const attrMeta = new THREE.BufferAttribute(aMeta,3).setUsage(THREE.DynamicDrawUsage);
 geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(CAP*3),3)); // unused, required
 geo.setAttribute('aData', attrData);
 geo.setAttribute('aMeta', attrMeta);
@@ -115,24 +182,24 @@ geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 1e5);
 let head = 0, dirtyFrom = -1, dirtyCount = 0;
 
 const common = {
-  uTime:{value:0}, uFade:{value:FADE}, uSize:{value:1.6*DPR}, uHead:{value:0}, uSweep:{value:0}, uScale:{value:1},
+  uTime:{value:0}, uFade:{value:FADE}, uSize:{value:1.6*DPR}, uHead:{value:0}, uSweep:{value:0}, uScale:{value:1}, uShowP:{value:1}, uShowS:{value:1},
 };
 const FRAG = `
 precision highp float;
-varying float vA;
+varying float vA; varying float vL;
 void main(){
   vec2 p = gl_PointCoord*2.0-1.0; float r = dot(p,p);
   if(r>1.0) discard;
-  float core = smoothstep(0.55,0.25,r);       // crisp core
-  float glow = (1.0-r)*0.18;                  // very faint halo
-  float a = (core+glow)*vA;
-  gl_FragColor = vec4(vec3(a),1.0);
+  float a;
+  if(vL>0.5){ a = (smoothstep(0.62,0.3,r) + (1.0-r)*0.08)*vA*1.35; }        // sonar echo: crisp, bright
+  else { a = (smoothstep(0.55,0.2,r)*0.6 + (1.0-r)*0.2)*vA*0.75; }          // passive sound: dimmer haze
+  gl_FragColor = vec4(vec3(min(a,1.0)),1.0);
 }`;
 const VCOMMON = `
-attribute vec4 aData; attribute vec2 aMeta;
-uniform float uTime,uFade,uSize,uHead,uSweep,uScale;
-varying float vA;
-float lifeA(){ float age=uTime-aMeta.x; if(age<0.0||age>uFade) return 0.0; float f=1.0-age/uFade; return f*f*aMeta.y; }
+attribute vec4 aData; attribute vec3 aMeta;
+uniform float uTime,uFade,uSize,uHead,uSweep,uScale,uShowP,uShowS;
+varying float vA; varying float vL;
+float lifeA(){ vL=aMeta.z; if((aMeta.z>0.5?uShowS:uShowP)<0.5) return 0.0; float age=uTime-aMeta.x; if(age<0.0||age>uFade) return 0.0; float f=1.0-age/uFade; return f*f*aMeta.y; }
 `;
 const matRadar = new THREE.ShaderMaterial({
   uniforms:common, transparent:true, depthWrite:false, depthTest:false, blending:THREE.AdditiveBlending,
@@ -145,7 +212,7 @@ const matRadar = new THREE.ShaderMaterial({
     float boost=1.0+1.6*exp(-sw*3.0);
     vA=min(a*boost,1.0);
     gl_Position=projectionMatrix*modelViewMatrix*vec4(p,0.0,1.0);
-    gl_PointSize=uSize*(0.85+0.4*a);
+    gl_PointSize=uSize*(0.85+0.4*a)*(aMeta.z>0.5?1.2:1.0);
   }`, fragmentShader:FRAG });
 const mat3D = new THREE.ShaderMaterial({
   uniforms:common, transparent:true, depthWrite:false, depthTest:false, blending:THREE.AdditiveBlending,
@@ -186,7 +253,7 @@ function spawn(hdgRad, elRad, band, inten){
   const r2 = b.r2[0] + (b.r2[1]-b.r2[0])*(0.15+0.7*t) + (Math.random()-0.5)*0.045;
   const r3 = b.r3[0] + (b.r3[1]-b.r3[0])*(0.15+0.7*t) + (Math.random()-0.5)*0.07;
   aData[i*4]=hdgRad+jh; aData[i*4+1]=elRad+je; aData[i*4+2]=r2; aData[i*4+3]=r3;
-  aMeta[i*2]=S.now; aMeta[i*2+1]=(0.25+0.75*t)*b.shade;
+  aMeta[i*3]=S.now; aMeta[i*3+1]=(0.25+0.75*t)*b.shade; aMeta[i*3+2]=0;
   if(dirtyFrom<0){dirtyFrom=i;dirtyCount=0;} dirtyCount++;
   head=(head+1)%CAP;
 }
@@ -194,11 +261,18 @@ function flushParticles(){
   if(dirtyFrom<0) return;
   attrData.clearUpdateRanges(); attrMeta.clearUpdateRanges();
   const n=Math.min(dirtyCount,CAP), first=Math.min(n,CAP-dirtyFrom);
-  attrData.addUpdateRange(dirtyFrom*4, first*4); attrMeta.addUpdateRange(dirtyFrom*2, first*2);
-  if(n>first){ attrData.addUpdateRange(0,(n-first)*4); attrMeta.addUpdateRange(0,(n-first)*2); }
+  attrData.addUpdateRange(dirtyFrom*4, first*4); attrMeta.addUpdateRange(dirtyFrom*3, first*3);
+  if(n>first){ attrData.addUpdateRange(0,(n-first)*4); attrMeta.addUpdateRange(0,(n-first)*3); }
   attrData.needsUpdate=true; attrMeta.needsUpdate=true; dirtyFrom=-1; dirtyCount=0;
 }
-function clearParticles(){ for(let i=0;i<CAP;i++) aMeta[i*2]=-1e6; attrMeta.clearUpdateRanges(); attrMeta.needsUpdate=true; env.fill(0); S.peakHold.fill(0); }
+function spawnSonar(hdg,el,r,inten){
+  const i=head, rr=r+(Math.random()-0.5)*0.03;
+  aData[i*4]=hdg+(Math.random()-0.5)*0.05; aData[i*4+1]=el+(Math.random()-0.5)*0.05;
+  aData[i*4+2]=rr/SON.maxR*0.98; aData[i*4+3]=rr/SON.maxR*2.85;
+  aMeta[i*3]=S.now; aMeta[i*3+1]=0.55+0.45*inten; aMeta[i*3+2]=1;
+  if(dirtyFrom<0){dirtyFrom=i;dirtyCount=0;} dirtyCount++; head=(head+1)%CAP;
+}
+function clearParticles(){ for(let i=0;i<CAP;i++) aMeta[i*3]=-1e6; attrMeta.clearUpdateRanges(); attrMeta.needsUpdate=true; env.fill(0); S.peakHold.fill(0); }
 
 // ---------- orientation: phone as pointer ----------
 // W3C: world X=east, Y=north, Z=up. Device: x=right, y=top edge, z=out of screen. R = Rz(a)·Rx(b)·Ry(g).
@@ -250,7 +324,7 @@ async function initAudio(){
   if(ac.state==='suspended') await ac.resume();
   const src = ac.createMediaStreamSource(stream);
   an = ac.createAnalyser(); an.fftSize=8192; an.smoothingTimeConstant=0.55; an.minDecibels=-140; an.maxDecibels=0;
-  src.connect(an);                                        // never connected to destination: silent
+  src.connect(an); S.src=src;                             // mic is never routed to the speaker
   const set = stream.getAudioTracks()[0].getSettings?.()||{};
   const ch = set.channelCount || src.channelCount;
   if(ch===2){
@@ -265,6 +339,7 @@ async function initAudio(){
 }
 function setupBins(sr){
   const n = 4096; binHz = sr/8192; freq = new Float32Array(n); binBase=new Float32Array(n).fill(NaN);
+  S.ultraHi = null;
   bandBins = BANDS.map(b=>[Math.max(1,Math.round(b.lo/binHz)), Math.min(n-1,Math.round(Math.min(b.hi,sr/2-200)/binHz))]);
 }
 function startCal(){ cal.active=true; cal.until=S.now+2; cal.acc=new Float64Array(freq.length); cal.n=0; cal.bandAcc=[0,0,0,0]; msg('CALIBRATING · stay quiet for 2 s'); }
@@ -293,8 +368,8 @@ function analyse(){
     S.bandAbove[b]=Math.max(0,S.bandDb[b]-floorDb[b]);
   }
   // dominant frequency (above baseline), parabolic interpolation
-  let best=-1e9, bi=0; const i0=Math.round(30/binHz);
-  for(let i=i0;i<freq.length-1;i++){ const v=freq[i]-(isNaN(binBase[i])?-110:binBase[i]); if(v>best){best=v;bi=i;} }
+  let best=-1e9, bi=0; const i0=Math.round(30/binHz), iMax=son.on?Math.round(16500/binHz):freq.length-1;
+  for(let i=i0;i<iMax;i++){ const v=freq[i]-(isNaN(binBase[i])?-110:binBase[i]); if(v>best){best=v;bi=i;} }
   if(best>6){ const a=freq[bi-1],b=freq[bi],c=freq[bi+1]; const p=0.5*(a-c)/(a-2*b+c||1); S.domHz=(bi+(isFinite(p)?p:0))*binHz; } else S.domHz=0;
   if(S.stereo){
     anL.getFloatTimeDomainData(tdL); anR.getFloatTimeDomainData(tdR);
@@ -354,6 +429,72 @@ function emit(dt){
   if(val>env[ei]) env[ei]=val;
 }
 
+
+// ---------- active sonar runtime (opt-in, near-ultrasonic) ----------
+const son={on:false,ready:false,ring:null,R:0,latest:-1,pend:[],hist:[],nextT:0,lastCode:-1,tpls:null,bufs:null,secs:null,out:null,msgT:0,demoNext:0,
+  st:{sent:0,ok:0,rej:0,echo:0,last:null,why:''}};
+const angDiff=(a,b)=>((a-b+Math.PI*3)%(Math.PI*2))-Math.PI;
+async function sonarInit(){
+  const sr=ac.sampleRate;
+  son.tpls=[0,1,2].map(c=>makeChirp(c,sr)); son.secs=makeBand(sr);
+  son.bufs=son.tpls.map(t=>{ const b=ac.createBuffer(1,t.length,sr); b.copyToChannel(t,0); return b; });
+  son.out=ac.createGain(); son.out.gain.value=SON.gain; son.out.connect(ac.destination);
+  const code="class C extends AudioWorkletProcessor{constructor(){super();this.b=new Float32Array(2048);this.n=0;this.f=0}process(i){const c=i[0]&&i[0][0];if(c){if(this.n===0)this.f=currentFrame;this.b.set(c,this.n);this.n+=c.length;if(this.n>=2048){this.port.postMessage({f:this.f,d:this.b.slice(0,this.n)});this.n=0}}return true}}registerProcessor('fv-cap',C);";
+  await ac.audioWorklet.addModule(URL.createObjectURL(new Blob([code],{type:'application/javascript'})));
+  const node=new AudioWorkletNode(ac,'fv-cap',{numberOfInputs:1,numberOfOutputs:1,channelCount:1,channelCountMode:'explicit'});
+  const mute=ac.createGain(); mute.gain.value=0; S.src.connect(node); node.connect(mute); mute.connect(ac.destination);
+  son.R=Math.round(sr*2); son.ring=new Float32Array(son.R);
+  node.port.onmessage=e=>{ const {f,d}=e.data; for(let i=0;i<d.length;i++) son.ring[(f+i)%son.R]=d[i]; son.latest=f+d.length; };
+  son.ready=true;
+}
+function sonarTick(){
+  if(!son.on||!son.ready) return; const sr=ac.sampleRate;
+  if(ac.currentTime>son.nextT-0.06){
+    if(son.nextT<ac.currentTime+0.02) son.nextT=ac.currentTime+0.05;
+    let code; do code=Math.floor(Math.random()*3); while(code===son.lastCode); son.lastCode=code;   // coded pings
+    const b=ac.createBufferSource(); b.buffer=son.bufs[code]; b.connect(son.out); b.start(son.nextT);
+    son.pend.push({e:Math.round(son.nextT*sr),code,hdg:S.heading,el:S.elev}); son.st.sent++;
+    son.nextT+=SON.interval+Math.random()*0.04;                                               // jittered timing
+  }
+  const n=Math.round((SON.pre+SON.post)*sr);
+  while(son.pend.length && son.latest>=son.pend[0].e+Math.round(SON.post*sr)){
+    const p=son.pend.shift(), a=p.e-Math.round(SON.pre*sr);
+    if(a<0||son.latest-a>son.R) continue;
+    const raw=new Float32Array(n); for(let i=0;i<n;i++) raw[i]=son.ring[(a+i)%son.R];
+    handlePing(p, detectPing(raw,p.code,son.tpls,son.secs,sr));
+  }
+}
+function handlePing(p,r){
+  if(!r.ok){ son.st.rej++; son.st.why=r.reason; son.hist.push({hdg:p.hdg,peaks:[]}); if(son.hist.length>3) son.hist.shift(); return; }
+  son.st.ok++; son.st.why='';
+  const prev=son.hist.slice(-2);
+  for(const pk of r.peaks){   // plot only if the same range shows up in >=2 of the last 3 pings at ~the same heading
+    let votes=0; for(const h of prev){ if(Math.abs(angDiff(h.hdg,p.hdg))>12*D2R) continue; if(h.peaks.some(q=>Math.abs(q.r-pk.r)<0.1)) votes++; }
+    if(votes>=1 && pk.r<=SON.maxR){ const inten=Math.min(1,Math.log10(pk.snr)/3); for(let k=0;k<6;k++) spawnSonar(p.hdg,p.el,pk.r,inten); son.st.echo++; son.st.last=pk.r; }
+  }
+  son.hist.push({hdg:p.hdg,peaks:r.peaks}); if(son.hist.length>3) son.hist.shift();
+}
+function demoSonar(){   // simulated room 4.0 x 4.9 m with a pillar at 075° / 1.2 m
+  if(S.now<son.demoNext) return; son.demoNext=S.now+SON.interval;
+  const h=S.heading, dx=Math.sin(h), dy=Math.cos(h); const hits=[];
+  const tw=[]; if(dx>0) tw.push(2.3/dx); if(dx<0) tw.push(-1.7/dx); if(dy>0) tw.push(2.8/dy); if(dy<0) tw.push(-2.1/dy); hits.push(Math.min(...tw));
+  const ox=1.2*Math.sin(75*D2R), oy=1.2*Math.cos(75*D2R), b=dx*ox+dy*oy, c=ox*ox+oy*oy-0.25*0.25, disc=b*b-c; if(disc>0) hits.push(b-Math.sqrt(disc));
+  son.st.sent++; son.st.ok++;
+  for(const r of hits){ if(r>0.3&&r<=SON.maxR){ for(let k=0;k<6;k++) spawnSonar(h,S.elev,r,0.8); son.st.echo++; son.st.last=r; } }
+}
+$('sonar').onclick=async()=>{
+  if(!DEMO){
+    if(!ac){ msg('Tap START first'); return; }
+    if(!son.ready){ try{ await sonarInit(); }catch(e){ msg('Sonar unavailable on this browser: '+(e.message||e)); return; } }
+  }
+  son.on=!son.on; son.nextT=0; son.pend.length=0; son.hist.length=0;
+  if(bandBins.length){ if(S.ultraHi==null) S.ultraHi=bandBins[3][1]; bandBins[3][1]=son.on?Math.round(16500/binHz):S.ultraHi; } // keep chirps out of the passive layer
+  $('sonar').textContent=son.on?'SONAR ON':'SONAR OFF'; $('sonar').className=son.on?'on':'';
+  if(!son.on) msg('Sonar off. Passive listening only, no sound output.');
+};
+$('layP').onclick=()=>{ common.uShowP.value=common.uShowP.value?0:1; $('layP').className=common.uShowP.value?'on':'dim'; };
+$('layS').onclick=()=>{ common.uShowS.value=common.uShowS.value?0:1; $('layS').className=common.uShowS.value?'on':'dim'; };
+
 // ---------- CSV log ----------
 const log=[]; let lastLog=0;
 function logRow(){
@@ -376,7 +517,7 @@ function resize(){
   W=innerWidth; H=innerHeight; renderer.setSize(W,H,false);
   hud.width=W*DPR; hud.height=H*DPR; hx.setTransform(DPR,0,0,DPR,0,0);
   spec.width=spec.clientWidth*DPR; spec.height=spec.clientHeight*DPR;
-  cx=W/2; cy=H*0.47; RP=Math.min(W*0.46, H*0.33);
+  cx=W/2; cy=H*0.43; RP=Math.min(W*0.40, H*0.29);
   // ortho camera matching the HUD radar: 1 unit = RP px, centred at (cx,cy)
   camR.left=-cx/RP; camR.right=(W-cx)/RP; camR.top=cy/RP; camR.bottom=-(H-cy)/RP; camR.updateProjectionMatrix();
   cam3.aspect=W/H; cam3.updateProjectionMatrix();
@@ -413,7 +554,7 @@ function drawRadarHud(){
   g.fillStyle='#fff'; g.beginPath(); g.moveTo(cx,cy-RP*1.03+1); g.lineTo(cx-7,cy-RP*1.03-11); g.lineTo(cx+7,cy-RP*1.03-11); g.closePath(); g.fill();
   // rotating sweep (screen space) with trailing gradient
   const sa=S.sweep-Hd; // world sweep angle -> screen
-  for(let i=0;i<24;i++){ const a=sa-i*0.025; g.strokeStyle=`rgba(255,255,255,${0.22*(1-i/24)})`;
+  for(let i=0;i<10;i++){ const a=sa-i*0.05; g.strokeStyle=`rgba(255,255,255,${0.24*(1-i/10)})`;
     g.beginPath(); g.moveTo(cx,cy); g.lineTo(cx+Math.sin(a)*RP,cy-Math.cos(a)*RP); g.stroke(); }
   // directional envelope (peak hold per 5°) outside the rim
   g.strokeStyle='rgba(255,255,255,0.75)'; g.lineWidth=2;
@@ -425,6 +566,9 @@ function drawRadarHud(){
   if(pi>=0&&pk>3){ const a=(pi*5+2.5)*D2R-Hd, r=RP*0.985; const px=cx+Math.sin(a)*r, py=cy-Math.cos(a)*r;
     g.strokeStyle='#fff'; g.beginPath(); g.arc(px,py,6,0,7); g.stroke(); g.beginPath(); g.arc(px,py,10,0,7); g.globalAlpha=0.35; g.stroke(); g.globalAlpha=1;
     S.peakTxt=`${String(Math.round(pi*5+2.5)).padStart(3,'0')}° +${pk.toFixed(0)}`; } else S.peakTxt='---';
+  if(son.on){ g.setLineDash([2,5]); g.strokeStyle='#3a3a3a'; g.fillStyle='#6a6a6a'; g.font='9px ui-monospace,monospace';
+    for(let m=1;m<=SON.maxR;m++){ const r=m/SON.maxR*0.98*RP; g.beginPath(); g.arc(cx,cy,r,0,7); g.stroke(); g.fillText(m+'m',cx+r*0.72+8,cy+r*0.72); }
+    g.setLineDash([]); }
   // Peter
   g.fillStyle='#fff'; g.beginPath(); g.arc(cx,cy,4.5,0,7); g.fill();
   g.strokeStyle='rgba(255,255,255,0.35)'; g.beginPath(); g.arc(cx,cy,9+4*Math.sin(S.now*4),0,7); g.stroke();
@@ -514,6 +658,8 @@ function frame(now){
   if(S.running){
     if(DEMO) demoMotion();
     analyse(); emit(dt); logRow();
+    if(DEMO){ if(son.on) demoSonar(); } else sonarTick();
+    if(son.on && now-son.msgT>500){ son.msgT=now; const st=son.st; msg(`SONAR ${DEMO?'(sim) ':''}18–21 kHz · pings ${st.sent} · kept ${st.ok} · rejected ${st.rej}${st.why?' ('+st.why+')':''} · echo ${st.last?st.last.toFixed(2)+' m':'--'}`); }
   }
   S.sweep=(S.sweep+dt*2.1)%(Math.PI*2);
   flushParticles();
@@ -532,12 +678,14 @@ function frame(now){
   else if(DEMO) $('rSt').textContent='DEMO';
   if(S.debug) S.debug.fps=fps;
 }
-window.__fv={S,get fps(){return fps}, get alive(){ let n=0; for(let i=0;i<CAP;i++) if(S.now-aMeta[i*2]<FADE) n++; return n; }};
+window.__fv={S,get fps(){return fps}, get alive(){ let n=0; for(let i=0;i<CAP;i++) if(S.now-aMeta[i*3]<FADE) n++; return n; }};
 resize();
 if(DEMO){
   // pre-fill ~25 s of sweeping so the map is populated immediately
   S.running=true; $('overlay').classList.add('hide'); msg('DEMO · synthetic sources at 040° voice, 205° hum, 300° whine, 120° traffic');
-  const save=S.t0; for(let k=0;k<25*30;k++){ S.now=k/30; demoMotion(); analyse(); emit(1/30); }
+  const save=S.t0; son.on=true; $('sonar').textContent='SONAR ON'; $('sonar').className='on';
+  for(let k=0;k<25*30;k++){ S.now=k/30; demoMotion(); analyse(); emit(1/30); demoSonar(); }
+  son.demoNext=0;
   S.t0=performance.now()-25000; flushParticles(); head=head; dirtyFrom=0; dirtyCount=CAP; flushParticles();
 }
 requestAnimationFrame(frame);
