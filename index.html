@@ -19,13 +19,22 @@ html,body{margin:0;height:100%;background:#000;color:var(--w);font-family:ui-mon
 .read span:nth-child(even){color:var(--w);font-size:14px;min-width:78px}
 .bot{position:fixed;left:0;right:0;bottom:0;padding:6px 10px calc(env(safe-area-inset-bottom) + 10px);background:linear-gradient(transparent,#000 30%)}
 .row{display:flex;gap:7px;margin-top:7px}
-button{flex:1;min-height:48px;background:#000;color:var(--w);border:1px solid #555;border-radius:10px;font:600 12px/1 inherit;letter-spacing:.14em;padding:0 4px}
+button{flex:1;min-height:44px;background:#000;color:var(--w);border:1px solid #555;border-radius:10px;font:600 12px/1 inherit;letter-spacing:.14em;padding:0 4px}
 button:active{background:#222}
 button.on{background:#e8e8e8;color:#000;border-color:#e8e8e8}
 button.dim{color:#666;border-color:#2a2a2a}
 #start{min-height:58px;font-size:15px;letter-spacing:.3em;border-color:#e8e8e8}
 #msg{font-size:11px;color:var(--g);text-align:center;min-height:14px;margin-top:2px;line-height:1.35}
-#spec{display:block;width:100%;height:58px}
+#spec{display:block;width:100%;height:46px}
+#range{margin-top:8px}
+#range small{font-size:9px;letter-spacing:.3em;color:var(--g)}
+#rRange{display:block;font-size:30px;line-height:1.05;color:var(--w);letter-spacing:.04em}
+#rWhy{display:block;font-size:9px;color:var(--g);font-style:normal;max-width:46vw;letter-spacing:.05em;line-height:1.3}
+#diagp{position:fixed;left:8px;right:8px;top:calc(env(safe-area-inset-top) + 118px);max-height:50vh;overflow:auto;background:rgba(0,0,0,.92);border:1px solid #444;border-radius:10px;padding:8px;z-index:4;touch-action:pan-y}
+#diagt{font-size:10px;line-height:1.38;margin:0 0 8px;white-space:pre-wrap;word-break:break-word;color:#cfcfcf;user-select:text;-webkit-user-select:text}
+#diagp button{width:100%}
+#glfail{position:fixed;left:16px;right:16px;top:40%;text-align:center;font-size:12px;line-height:1.5;color:#ddd;border:1px solid #555;border-radius:10px;padding:12px;background:#000;z-index:3}
+body.night #diagt{color:#8a8a8a}
 .hide{display:none!important}
 body.night{--w:#7a7a7a;--g:#4a4a4a}
 body.night button{color:#7a7a7a;border-color:#2c2c2c}
@@ -44,7 +53,8 @@ body.night #start{border-color:#5a5a5a}
 <canvas id="hud"></canvas>
 
 <div class="top">
-  <div class="title">FIELD VISION<b>SOUND RADAR</b><span id="mode" style="font-size:10px;letter-spacing:.2em">RADAR · HEADING-UP</span></div>
+  <div class="title">FIELD VISION<b>SOUND RADAR</b><span id="mode" style="font-size:10px;letter-spacing:.2em">RADAR · HEADING-UP</span>
+    <div id="range" class="hide"><small>SONAR RANGE</small><span id="rRange">--</span><em id="rWhy"></em></div></div>
   <div class="read">
     <span>LEVEL</span><span id="rDb">-- dB</span>
     <span>FREQ</span><span id="rHz">-- Hz</span>
@@ -65,21 +75,34 @@ body.night #start{border-color:#5a5a5a}
     <button class="on" data-b="0">LOW</button><button class="on" data-b="1">MID</button><button class="on" data-b="2">HIGH</button><button class="on" data-b="3">ULTRA</button>
   </div>
   <div class="row">
+    <button id="front">SET FRONT</button><button id="ssens">ECHO NORMAL</button><button id="sfreq">F HIGH</button><button id="diag">DIAG</button>
+  </div>
+  <div class="row">
     <button id="view">3D</button><button id="cal">CAL</button><button id="sens">SENS 2</button><button id="clear">CLEAR</button><button id="csv">CSV</button>
   </div>
 </div>
 
+<div id="diagp" class="hide"><pre id="diagt">collecting…</pre><button id="copyd">COPY DIAG</button></div>
+<div id="glfail" class="hide"></div>
 <div id="overlay">
   <h1>SOUND RADAR</h1>
   <p>Point the top of your phone like a torch. Sweep slowly around you. Loud or interesting directions build up dense particle clouds.</p>
   <p>Hold the phone at arm's length with your body behind it: your body blocks sound from behind, which sharpens direction.</p>
-  <p style="font-size:10px">Silent. Nothing is ever played through the speaker.</p>
+  <p style="font-size:10px">Silent unless you switch on SONAR (short quiet chirps). If something looks wrong, tap DIAG, then COPY DIAG.</p>
   <button id="start">START</button>
 </div>
 
+<script>
+window.__fvErr=[];
+addEventListener('error',function(e){ var m=e.message||('failed to load '+((e.target&&(e.target.src||e.target.href))||'resource')); window.__fvErr.push(new Date().toISOString().slice(11,19)+' '+m+(e.filename?' @'+e.filename.split('/').pop()+':'+e.lineno:'')); if(window.__fvErr.length>12) window.__fvErr.shift(); },true);
+addEventListener('unhandledrejection',function(e){ var r=e.reason; window.__fvErr.push(new Date().toISOString().slice(11,19)+' promise: '+(r&&r.message||r)); if(window.__fvErr.length>12) window.__fvErr.shift(); });
+setTimeout(function(){ if(!window.__fvLoaded){ var g=document.getElementById('glfail'); g.classList.remove('hide'); g.textContent='The app engine did not load (three.js from cdn.jsdelivr.net). Check your connection and reload. Errors: '+(window.__fvErr.join(' | ')||'none reported'); } },8000);
+</script>
 <script type="module">
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
 
+window.__fvLoaded = true;
+const VERSION = 'v2.2';
 const DEMO = new URLSearchParams(location.search).has('demo');
 const $ = id => document.getElementById(id);
 const D2R = Math.PI/180, R2D = 180/Math.PI;
@@ -96,7 +119,7 @@ let sensIdx = 1;
 
 // ==SONAR-DSP-BEGIN==
 // Active sonar, near-ultrasonic coded chirps. Pure functions (unit-tested offline).
-const SON = {f0:17500, f1:20500, dur:0.008, maxR:4.0, gMinMs:2.5, gMaxMs:30, N:6, codeRatio:1.5, oobMax:4, interval:0.34, gain:0.22, pre:0.1, post:0.3};
+const SON = {f0:17500, f1:20500, dur:0.008, maxR:4.0, gMinMs:2.5, gMaxMs:30, N:4, codeRatio:1.3, relMin:0.006, oobF:15000, oobMax:8, interval:0.36, gain:0.35, pre:0.1, post:0.5, directX:6};
 const SON_CODES = ['UP','DOWN','V'];
 function makeChirp(code, sr){
   const n=Math.round(SON.dur*sr), out=new Float32Array(n); let ph=0; const B=SON.f1-SON.f0;
@@ -113,7 +136,7 @@ function biquad(type,f,Q,sr){ // RBJ cookbook
 const BW8_Q=[0.5098,0.6013,0.9000,2.5629]; // 8th-order Butterworth sections
 function makeBand(sr){ const hi=Math.min(SON.f1+500, sr/2*0.96), s=[];
   for(const q of BW8_Q) s.push(biquad('hp',SON.f0-500,q,sr)); for(const q of BW8_Q) s.push(biquad('lp',hi,q,sr)); return s; }
-function makeOob(sr){ const s=[]; for(const q of BW8_Q) s.push(biquad('lp',15000,q,sr)); return s; }
+function makeOob(sr){ const s=[]; for(const q of BW8_Q) s.push(biquad('lp',SON.oobF,q,sr)); return s; }
 function filt(x,secs){ let y=Float32Array.from(x);
   for(const [b0,b1,b2,a1,a2] of secs){ let x1=0,x2=0,y1=0,y2=0; for(let i=0;i<y.length;i++){ const v=y[i], o=b0*v+b1*x1+b2*x2-a1*y1-a2*y2; x2=x1;x1=v;y2=y1;y1=o;y[i]=o; } }
   return y; }
@@ -126,25 +149,28 @@ function corrEnv(x,t,a,b){ // |matched filter| envelope for lags a..b-1
 }
 function energy(x,a,b){ let s=0; a=Math.max(0,a); b=Math.min(x.length,b); for(let i=a;i<b;i++) s+=x[i]*x[i]; return s/Math.max(1,b-a); }
 // raw: mic samples from (emit - pre) to (emit + post). Returns accepted echo peaks or a rejection reason.
-function detectPing(raw, code, tpls, secs, sr){
+function detectPing(raw, code, tpls, secs, sr, latHint){
   if(!secs.tf){ secs.tf=tpls.map(t=>{ const z=new Float32Array(t.length+64); z.set(t); return filt(z,secs); }); } // templates through the same filter
   tpls=secs.tf; const x=filt(raw,secs), tpl=tpls[code], emit=Math.round(SON.pre*sr);
-  const ds=corrEnv(x,tpl,emit-Math.round(0.01*sr),emit+Math.round(0.25*sr));
+  // direct speaker->mic arrival: search a narrow window once the round-trip latency is learned, else up to 450 ms
+  const ds = latHint!=null ? corrEnv(x,tpl,emit+latHint-Math.round(0.03*sr),emit+latHint+Math.round(0.03*sr))
+                           : corrEnv(x,tpl,emit-Math.round(0.01*sr),emit+Math.round(0.45*sr));
   let D=0,d=-1; for(let i=0;i<ds.e.length;i++) if(ds.e[i]>D){D=ds.e[i];d=ds.a+i;}
   const nA=d-Math.round(0.06*sr), nB=d-Math.round(0.01*sr);
-  if(d<0||nA<0) return {ok:false,reason:'no direct path'};
+  if(d<0||nA<0) return {ok:false,reason:'no direct path (speaker not heard)',D};
   const ns=corrEnv(x,tpl,nA,nB); let fl=0; for(const v of ns.e) fl+=v*v; fl=Math.sqrt(fl/Math.max(1,ns.e.length))+1e-9;
-  if(D<10*fl) return {ok:false,reason:'no direct path',D,floor:fl};
+  if(D<SON.directX*fl) return {ok:false,reason:'no direct path (speaker not heard)',D,floor:fl};
   { let bd=d,bv=0; for(let k=-4;k<=4;k++){ const v=Math.abs(corrAt(x,tpl,d+k)); if(v>bv){bv=v;bd=k+d;} } d=bd; // subtract direct path
     let te=0; for(const v of tpl) te+=v*v; const a=corrAt(x,tpl,d)/te; for(let k=0;k<tpl.length;k++) x[d+k]-=a*tpl[k]; }
   const gA=d+Math.round(SON.gMinMs/1000*sr), gB=d+Math.round(SON.gMaxMs/1000*sr);
   // broadband / impulsive rejection: out-of-band energy jump inside the echo window
   const oob=filt(raw,secs.oob||(secs.oob=makeOob(sr)));
   const oobRatio=energy(oob,gA,gB+tpl.length)/(energy(oob,nA,nB)+1e-12);
-  if(oobRatio>SON.oobMax) return {ok:false,reason:'impulse/broadband',oobRatio};
-  const g=corrEnv(x,tpl,gA,gB), thr=Math.max(SON.N*fl, 0.012*D), nms=Math.round(0.0006*sr), peaks=[];
+  if(oobRatio>SON.oobMax) return {ok:false,reason:'noise burst (clap/knock) rejected',D,floor:fl,oobRatio,lat:d-emit};
+  const g=corrEnv(x,tpl,gA,gB), thr=Math.max(SON.N*fl, SON.relMin*D), nms=Math.round(0.0006*sr), peaks=[];
   for(let i=1;i<g.e.length-1;i++){ const v=g.e[i]; if(v<thr||v<g.e[i-1]||v<g.e[i+1]) continue;
     const L=g.a+i; if(peaks.length&&L-peaks[peaks.length-1].L<nms){ if(v>peaks[peaks.length-1].v) peaks[peaks.length-1]={L,v}; continue; } peaks.push({L,v}); }
+  let gm=0; for(const v of g.e) if(v>gm) gm=v; const best=gm/fl;
   const out=[];
   for(const p of peaks){ // code check: echo must match THIS ping's code, not another sweep
     let own=0, other=0;
@@ -154,7 +180,7 @@ function detectPing(raw, code, tpls, secs, sr){
     out.push({r:(p.L-d)/sr*343/2, snr:p.v/fl});
   }
   out.sort((a,b)=>b.snr-a.snr);
-  return {ok:true, peaks:out.slice(0,4), D, floor:fl, oobRatio};
+  return {ok:true, peaks:out.slice(0,4), D, floor:fl, oobRatio, best, thrX:thr/fl, raw:peaks.length, lat:d-emit};
 }
 // ==SONAR-DSP-END==
 
@@ -170,10 +196,22 @@ const S = {
 const ENV_N = 72; const env = new Float32Array(ENV_N); // directional energy envelope (peak-hold per 5°)
 
 // ---------- renderer & shared particle buffer ----------
-const renderer = new THREE.WebGLRenderer({canvas:$('gl'), antialias:false, powerPreference:'high-performance'});
-renderer.setClearColor(0x000000,1);
 const DPR = Math.min(window.devicePixelRatio||1, 2);
-renderer.setPixelRatio(DPR);
+const glDiag = {info:'not started', err:''};
+let renderer = null;
+try{
+  renderer = new THREE.WebGLRenderer({canvas:$('gl'), antialias:false, powerPreference:'high-performance'});
+  renderer.setClearColor(0x000000,1); renderer.setPixelRatio(DPR);
+  const gx=renderer.getContext(), ext=gx.getExtension('WEBGL_debug_renderer_info');
+  glDiag.info=(renderer.capabilities.isWebGL2?'WebGL2':'WebGL1')+' · '+(ext?gx.getParameter(ext.UNMASKED_RENDERER_WEBGL):gx.getParameter(gx.RENDERER))+' · maxPoint '+gx.getParameter(gx.ALIASED_POINT_SIZE_RANGE)[1];
+  if(renderer.debug) renderer.debug.onShaderError=(g,prog,vs,fs)=>{ glDiag.err='shader: '+(g.getProgramInfoLog(prog)||g.getShaderInfoLog(vs)||g.getShaderInfoLog(fs)||'compile failed').slice(0,200); };
+  $('gl').addEventListener('webglcontextlost',e=>{ e.preventDefault(); glDiag.err='WebGL context lost'; });
+  $('gl').addEventListener('webglcontextrestored',()=>{ glDiag.err='context restored'; });
+}catch(e){
+  renderer=null; glDiag.info='FAILED'; glDiag.err=String(e.message||e);
+  $('glfail').classList.remove('hide');
+  $('glfail').textContent='WebGL is not available on this browser ('+glDiag.err+'). The particle map can\'t draw. Readouts and SONAR RANGE still work. Try Chrome with hardware acceleration on.';
+}
 
 const geo = new THREE.BufferGeometry();
 const aData = new Float32Array(CAP*4);   // heading(rad), elev(rad), r2d, r3d
@@ -231,7 +269,7 @@ const mat3D = new THREE.ShaderMaterial({
     vec4 mv=modelViewMatrix*vec4(p,1.0);
     vA=min(a*1.5,1.0);
     gl_Position=projectionMatrix*mv;
-    gl_PointSize=clamp(uSize*(5.0/-mv.z),1.0,uSize*1.8);
+    gl_PointSize=clamp(uSize*(6.0/-mv.z),uSize*0.75,uSize*2.0);   // manual size attenuation, never below ~1.2 css px
   }`, fragmentShader:FRAG });
 
 const sceneR = new THREE.Scene(); sceneR.add(new THREE.Points(geo, matRadar));
@@ -248,6 +286,9 @@ const scaffold = new THREE.Group(); scene3.add(scaffold);
   const grid = new THREE.PolarGridHelper(3,12,4,96,0x1c1c1c,0x1c1c1c); grid.position.y=-0.9; scaffold.add(grid);
   const me = new THREE.Mesh(new THREE.SphereGeometry(0.035,16,12), new THREE.MeshBasicMaterial({color:0xffffff})); scaffold.add(me);
 }
+const meterRings = new THREE.Group(); scene3.add(meterRings);
+{ const lm=new THREE.LineDashedMaterial({color:0x555555,dashSize:0.05,gapSize:0.07});
+  for(let m=1;m<=4;m++){ const r=m/4*2.85; const g=new THREE.BufferGeometry().setFromPoints(new THREE.EllipseCurve(0,0,r,r).getPoints(128)); const l=new THREE.LineLoop(g,lm); l.computeLineDistances(); l.rotation.x=-Math.PI/2; meterRings.add(l); } }
 const beamGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(),new THREE.Vector3(0,0,-3)]);
 const beam = new THREE.Line(beamGeo, new THREE.LineBasicMaterial({color:0x9a9a9a})); scene3.add(beam);
 const ORB0={yaw:0,pitch:0.8,dist:5.2}; const orbit = {...ORB0};
@@ -291,13 +332,23 @@ function rot(a,b,g,v){
   return [x,y,z];
 }
 function screenAngle(){ return ((screen.orientation&&screen.orientation.angle)||window.orientation||0)*D2R; }
+const ori={src:'none', nAbs:0, nRel:0, rateAbs:0, rateRel:0, lastAbsT:-1e9, raw:[null,null,null], rawHdg:0, offset:0, needZero:false};
+const wrap2pi=a=>((a%(2*Math.PI))+2*Math.PI)%(2*Math.PI);
 function onOri(e, isAbs){
+  const now=performance.now();
+  if(isAbs) ori.nAbs++; else ori.nRel++;
+  if(isAbs || now-ori.lastAbsT>1500) ori.raw=[e.alpha,e.beta,e.gamma];
   if(e.alpha==null && e.webkitCompassHeading==null) return;
-  let alpha=e.alpha||0;
-  if(e.webkitCompassHeading!=null && !isAbs){ alpha = 360 - e.webkitCompassHeading; S.absolute=true; } // iOS
-  else if(isAbs || e.absolute) S.absolute=true;
-  if(S.gotAbs && !isAbs && e.webkitCompassHeading==null) return; // prefer the absolute stream
-  if(isAbs) S.gotAbs=true;
+  let alpha=e.alpha||0, src;
+  if(isAbs){ src='deviceorientationabsolute (compass)'; ori.lastAbsT=now; }
+  else if(e.webkitCompassHeading!=null){ alpha=360-e.webkitCompassHeading; src='deviceorientation + iOS compass'; ori.lastAbsT=now; }
+  else if(e.absolute===true){ src='deviceorientation (absolute)'; ori.lastAbsT=now; }
+  else { if(now-ori.lastAbsT<1500) return; src='deviceorientation (RELATIVE, no compass)'; }   // fallback
+  if(src!==ori.src){
+    const isRel=src.includes('RELATIVE'), wasRel=ori.src.includes('RELATIVE'); ori.src=src;
+    if(isRel && !wasRel){ ori.needZero=true; msg('No compass events: heading is relative. 0° = where you pointed at START. SET FRONT re-zeros.'); }
+    if(!isRel && wasRel){ ori.offset=0; }
+  }
   const a=alpha*D2R, b=(e.beta||0)*D2R, g=(e.gamma||0)*D2R, so=screenAngle();
   // "top edge" of the screen as currently displayed (portrait = device top)
   const up = rot(a,b,g,[Math.sin(so),Math.cos(so),0]);
@@ -306,7 +357,10 @@ function onOri(e, isAbs){
   const v=[up[0]+back[0], up[1]+back[1], up[2]+back[2]];
   const h=Math.hypot(v[0],v[1]); if(h<1e-4) return;
   const k=0.25; S.hx+= (v[0]/h-S.hx)*k; S.hy+= (v[1]/h-S.hy)*k;
-  S.heading = (Math.atan2(S.hx,S.hy)+2*Math.PI)%(2*Math.PI);
+  ori.rawHdg = wrap2pi(Math.atan2(S.hx,S.hy));
+  if(ori.needZero){ ori.offset=ori.rawHdg; ori.needZero=false; }
+  S.heading = wrap2pi(ori.rawHdg-ori.offset);
+  S.absolute = !ori.src.includes('RELATIVE') && ori.offset===0;
   S.elev = Math.atan2(v[2],h);               // 0 when held at ~45°, + tilt up, − tilt down
   S.hasOri=true;
 }
@@ -323,17 +377,19 @@ let ac, an, freq, binHz, binBase=null, bandBins=[], anL, anR, tdL, tdR;
 const cal = {active:false, until:0, acc:null, n:0, bandAcc:[0,0,0,0]};
 const floorDb=[NaN,NaN,NaN,NaN];
 
+function set0(st){ try{ const t=st.getAudioTracks()[0], g=t.getSettings(); return (t.label||'mic')+' · '+(g.sampleRate||'?')+' Hz · ch '+(g.channelCount||'?')+' · ec '+g.echoCancellation+' ns '+g.noiseSuppression+' agc '+g.autoGainControl; }catch(e){ return '?'; } }
 async function initAudio(){
   const stream = await navigator.mediaDevices.getUserMedia({audio:{
     echoCancellation:false, noiseSuppression:false, autoGainControl:false,
     channelCount:{ideal:2}, sampleRate:{ideal:48000}}});
-  ac = new (window.AudioContext||window.webkitAudioContext)({latencyHint:'interactive'});
-  if(ac.state==='suspended') await ac.resume();
+  if(!ac) ac = new (window.AudioContext||window.webkitAudioContext)({latencyHint:'interactive'});
+  if(ac.state!=='running') await ac.resume();
+  S.micSettings=set0(stream);
   const src = ac.createMediaStreamSource(stream);
   an = ac.createAnalyser(); an.fftSize=8192; an.smoothingTimeConstant=0.55; an.minDecibels=-140; an.maxDecibels=0;
   src.connect(an); S.src=src;                             // mic is never routed to the speaker
   const set = stream.getAudioTracks()[0].getSettings?.()||{};
-  const ch = set.channelCount || src.channelCount;
+  const ch = set.channelCount || src.channelCount; S.micCh=ch;
   if(ch===2){
     const sp=ac.createChannelSplitter(2); src.connect(sp);
     anL=ac.createAnalyser(); anR=ac.createAnalyser(); anL.fftSize=anR.fftSize=1024;
@@ -375,7 +431,7 @@ function analyse(){
     S.bandAbove[b]=Math.max(0,S.bandDb[b]-floorDb[b]);
   }
   // dominant frequency (above baseline), parabolic interpolation
-  let best=-1e9, bi=0; const i0=Math.round(30/binHz), iMax=son.on?Math.round(16500/binHz):freq.length-1;
+  let best=-1e9, bi=0; const i0=Math.round(30/binHz), iMax=son.on?Math.round((SON.f0-1000)/binHz):freq.length-1;
   for(let i=i0;i<iMax;i++){ const v=freq[i]-(isNaN(binBase[i])?-110:binBase[i]); if(v>best){best=v;bi=i;} }
   if(best>6){ const a=freq[bi-1],b=freq[bi],c=freq[bi+1]; const p=0.5*(a-c)/(a-2*b+c||1); S.domHz=(bi+(isFinite(p)?p:0))*binHz; } else S.domHz=0;
   if(S.stereo){
@@ -439,13 +495,18 @@ function emit(dt){
 
 // ---------- active sonar runtime (opt-in, near-ultrasonic) ----------
 const son={on:false,ready:false,ring:null,R:0,latest:-1,pend:[],hist:[],nextT:0,lastCode:-1,tpls:null,bufs:null,secs:null,out:null,msgT:0,demoNext:0,
-  st:{sent:0,ok:0,rej:0,echo:0,last:null,why:''}};
+  st:{sent:0,ok:0,rej:0,echo:0,last:null,lastT:-1e9,why:'',played:0,state:'',D:0,floor:0,best:0,thrX:0}};
+son.lat=null; son.latHist=[]; son.noDirect=0;
+const SSENS=[{N:6,cr:1.5,rel:0.012,prev:2,oob:4,label:'STRICT'},{N:4,cr:1.3,rel:0.006,prev:1,oob:8,label:'NORMAL'},{N:3,cr:1.2,rel:0.004,prev:0,oob:16,label:'LOOSE'}];
+const SFREQ=[{f0:17500,f1:20500,oob:15000,gain:0.35,label:'HIGH'},{f0:10000,f1:14000,oob:7500,gain:0.12,label:'MID'}];
+let ssIdx=1, sfIdx=0;
+function buildSonar(){ const sr=ac.sampleRate; son.tpls=[0,1,2].map(c=>makeChirp(c,sr)); son.secs=makeBand(sr);
+  son.bufs=son.tpls.map(t=>{ const b=ac.createBuffer(1,t.length,sr); b.copyToChannel(t,0); return b; }); if(son.out) son.out.gain.value=SON.gain; }
+function passiveCap(){ if(!bandBins.length) return; if(S.ultraHi==null) S.ultraHi=bandBins[3][1]; bandBins[3][1]=son.on?Math.max(bandBins[3][0]+1,Math.round((SON.f0-1000)/binHz)):S.ultraHi; }
 const angDiff=(a,b)=>((a-b+Math.PI*3)%(Math.PI*2))-Math.PI;
 async function sonarInit(){
   const sr=ac.sampleRate;
-  son.tpls=[0,1,2].map(c=>makeChirp(c,sr)); son.secs=makeBand(sr);
-  son.bufs=son.tpls.map(t=>{ const b=ac.createBuffer(1,t.length,sr); b.copyToChannel(t,0); return b; });
-  son.out=ac.createGain(); son.out.gain.value=SON.gain; son.out.connect(ac.destination);
+  son.out=ac.createGain(); son.out.gain.value=SON.gain; son.out.connect(ac.destination); buildSonar();
   const code="class C extends AudioWorkletProcessor{constructor(){super();this.b=new Float32Array(2048);this.n=0;this.f=0}process(i){const c=i[0]&&i[0][0];if(c){if(this.n===0)this.f=currentFrame;this.b.set(c,this.n);this.n+=c.length;if(this.n>=2048){this.port.postMessage({f:this.f,d:this.b.slice(0,this.n)});this.n=0}}return true}}registerProcessor('fv-cap',C);";
   await ac.audioWorklet.addModule(URL.createObjectURL(new Blob([code],{type:'application/javascript'})));
   const node=new AudioWorkletNode(ac,'fv-cap',{numberOfInputs:1,numberOfOutputs:1,channelCount:1,channelCountMode:'explicit'});
@@ -456,10 +517,11 @@ async function sonarInit(){
 }
 function sonarTick(){
   if(!son.on||!son.ready) return; const sr=ac.sampleRate;
+  if(ac.state!=='running'){ son.st.state='audio paused by browser: tap the screen'; return; }
   if(ac.currentTime>son.nextT-0.06){
     if(son.nextT<ac.currentTime+0.02) son.nextT=ac.currentTime+0.05;
     let code; do code=Math.floor(Math.random()*3); while(code===son.lastCode); son.lastCode=code;   // coded pings
-    const b=ac.createBufferSource(); b.buffer=son.bufs[code]; b.connect(son.out); b.start(son.nextT);
+    const b=ac.createBufferSource(); b.buffer=son.bufs[code]; b.connect(son.out); b.onended=()=>son.st.played++; b.start(son.nextT);
     son.pend.push({e:Math.round(son.nextT*sr),code,hdg:S.heading,el:S.elev}); son.st.sent++;
     son.nextT+=SON.interval+Math.random()*0.04;                                               // jittered timing
   }
@@ -468,16 +530,23 @@ function sonarTick(){
     const p=son.pend.shift(), a=p.e-Math.round(SON.pre*sr);
     if(a<0||son.latest-a>son.R) continue;
     const raw=new Float32Array(n); for(let i=0;i<n;i++) raw[i]=son.ring[(a+i)%son.R];
-    handlePing(p, detectPing(raw,p.code,son.tpls,son.secs,sr));
+    handlePing(p, detectPing(raw,p.code,son.tpls,son.secs,sr,son.lat));
   }
 }
 function handlePing(p,r){
-  if(!r.ok){ son.st.rej++; son.st.why=r.reason; son.hist.push({hdg:p.hdg,peaks:[]}); if(son.hist.length>3) son.hist.shift(); return; }
-  son.st.ok++; son.st.why='';
-  const prev=son.hist.slice(-2);
-  for(const pk of r.peaks){   // plot only if the same range shows up in >=2 of the last 3 pings at ~the same heading
-    let votes=0; for(const h of prev){ if(Math.abs(angDiff(h.hdg,p.hdg))>12*D2R) continue; if(h.peaks.some(q=>Math.abs(q.r-pk.r)<0.1)) votes++; }
-    if(votes>=1 && pk.r<=SON.maxR){ const inten=Math.min(1,Math.log10(pk.snr)/3); for(let k=0;k<6;k++) spawnSonar(p.hdg,p.el,pk.r,inten); son.st.echo++; son.st.last=pk.r; }
+  const st=son.st; st.D=r.D||0; st.floor=r.floor||0; st.best=r.best||0; st.thrX=r.thrX||0;
+  if(r.lat!=null){ son.latHist.push(r.lat); if(son.latHist.length>7) son.latHist.shift();
+    if(son.latHist.length>=3){ const m=[...son.latHist].sort((a,b)=>a-b)[son.latHist.length>>1]; if(son.latHist.filter(v=>Math.abs(v-m)<0.01*ac.sampleRate).length>=3) son.lat=m; } }
+  if(!r.ok && r.reason.startsWith('no direct')){ son.noDirect++; if(son.lat!=null && son.noDirect>=4){ son.lat=null; son.latHist.length=0; }
+    if(son.noDirect>=8 && sfIdx===0 && !son.autoMid){ son.autoMid=true; son.noDirect=0; $('sfreq').onclick(); msg('This phone did not hear its own 17.5–20.5 kHz chirps, so I switched to MID 10–14 kHz (faint ticks).'); } }
+  else son.noDirect=0;
+  if(!r.ok){ st.rej++; st.why=r.reason; st.state=r.reason; son.hist.push({hdg:p.hdg,peaks:[]}); if(son.hist.length>3) son.hist.shift(); return; }
+  st.ok++; st.why='';
+  const need=SSENS[ssIdx].prev, prev=need?son.hist.slice(-need):[]; let plotted=0;
+  st.state = r.peaks.length ? 'echo seen, waiting for a repeat ping' : (r.raw ? 'peaks failed the code check' : 'no echo above threshold (best '+st.best.toFixed(1)+'x floor)');
+  for(const pk of r.peaks){   // consistency: same range (±12 cm) in a recent ping at ~the same heading (none needed in LOOSE)
+    let votes=0; for(const h of prev){ if(Math.abs(angDiff(h.hdg,p.hdg))>12*D2R) continue; if(h.peaks.some(q=>Math.abs(q.r-pk.r)<0.12)) votes++; }
+    if((need===0||votes>=1) && pk.r<=SON.maxR){ plotted++; st.lastT=S.now; st.state='echo'; const inten=Math.min(1,Math.log10(pk.snr)/3); for(let k=0;k<6;k++) spawnSonar(p.hdg,p.el,pk.r,inten); son.st.echo++; son.st.last=pk.r; }
   }
   son.hist.push({hdg:p.hdg,peaks:r.peaks}); if(son.hist.length>3) son.hist.shift();
 }
@@ -487,18 +556,25 @@ function demoSonar(){   // simulated room 4.0 x 4.9 m with a pillar at 075° / 1
   const tw=[]; if(dx>0) tw.push(2.3/dx); if(dx<0) tw.push(-1.7/dx); if(dy>0) tw.push(2.8/dy); if(dy<0) tw.push(-2.1/dy); hits.push(Math.min(...tw));
   const ox=1.2*Math.sin(75*D2R), oy=1.2*Math.cos(75*D2R), b=dx*ox+dy*oy, c=ox*ox+oy*oy-0.25*0.25, disc=b*b-c; if(disc>0) hits.push(b-Math.sqrt(disc));
   son.st.sent++; son.st.ok++;
-  for(const r of hits){ if(r>0.3&&r<=SON.maxR){ for(let k=0;k<6;k++) spawnSonar(h,S.elev,r,0.8); son.st.echo++; son.st.last=r; } }
+  son.st.state='no echo in range'; for(const r of hits){ if(r>0.3&&r<=SON.maxR){ for(let k=0;k<6;k++) spawnSonar(h,S.elev,r,0.8); son.st.echo++; son.st.last=r; son.st.lastT=S.now; son.st.state='echo'; } }
 }
 $('sonar').onclick=async()=>{
   if(!DEMO){
     if(!ac){ msg('Tap START first'); return; }
-    if(!son.ready){ try{ await sonarInit(); }catch(e){ msg('Sonar unavailable on this browser: '+(e.message||e)); return; } }
+    try{ if(ac.state!=='running') await ac.resume(); }catch(e){}
+    if(!son.ready){ try{ await sonarInit(); }catch(e){ son.st.state='init failed: '+(e.message||e); msg('Sonar unavailable on this browser: '+(e.message||e)); return; } }
   }
   son.on=!son.on; son.nextT=0; son.pend.length=0; son.hist.length=0;
-  if(bandBins.length){ if(S.ultraHi==null) S.ultraHi=bandBins[3][1]; bandBins[3][1]=son.on?Math.round(16500/binHz):S.ultraHi; } // keep chirps out of the passive layer
+  passiveCap();   // keep chirps out of the passive layer
+  $('range').classList.toggle('hide',!son.on); son.st.state=son.on?'starting…':'';
   $('sonar').textContent='SONAR'; $('sonar').className=son.on?'on':'';
   if(!son.on) msg('Sonar off. Passive listening only, no sound output.');
 };
+$('ssens').onclick=()=>{ ssIdx=(ssIdx+1)%SSENS.length; const s=SSENS[ssIdx]; SON.N=s.N; SON.codeRatio=s.cr; SON.relMin=s.rel; SON.oobMax=s.oob; son.hist.length=0;
+  $('ssens').textContent='ECHO '+s.label; msg(['STRICT: threshold 6x noise, must repeat in 2 of 3 pings','NORMAL: threshold 4x noise, must repeat in 2 pings in a row','LOOSE: threshold 3x noise, single ping is enough (more false dots)'][ssIdx]); };
+$('sfreq').onclick=()=>{ sfIdx=(sfIdx+1)%SFREQ.length; const f=SFREQ[sfIdx]; SON.f0=f.f0; SON.f1=f.f1; SON.oobF=f.oob; SON.gain=f.gain;
+  if(son.ready) buildSonar(); son.hist.length=0; son.pend.length=0; son.lat=null; son.latHist.length=0; son.noDirect=0; passiveCap();
+  $('sfreq').textContent='F '+f.label; msg(f.label==='HIGH'?'Chirps 17.5–20.5 kHz: inaudible to most adults, but some phones can\'t play or hear them':'Chirps 10–14 kHz: faint audible ticks, works on more phones'); };
 $('layP').onclick=()=>{ common.uShowP.value=common.uShowP.value?0:1; $('layP').className=common.uShowP.value?'on':'dim'; };
 $('layS').onclick=()=>{ common.uShowS.value=common.uShowS.value?0:1; $('layS').className=common.uShowS.value?'on':'dim'; };
 
@@ -521,10 +597,10 @@ function exportCsv(){
 const hud=$('hud'), hx=hud.getContext('2d'), spec=$('spec'), sx=spec.getContext('2d');
 let W=0,H=0,cx=0,cy=0,RP=0;
 function resize(){
-  W=innerWidth; H=innerHeight; renderer.setSize(W,H,false);
+  W=Math.max(1,innerWidth); H=Math.max(1,innerHeight); if(renderer) renderer.setSize(W,H,false);
   hud.width=W*DPR; hud.height=H*DPR; hx.setTransform(DPR,0,0,DPR,0,0);
   spec.width=spec.clientWidth*DPR; spec.height=spec.clientHeight*DPR;
-  cx=W/2; cy=H*0.43; RP=Math.min(W*0.40, H*0.29);
+  cx=W/2; cy=H*0.40; RP=Math.min(W*0.40, H*0.255);
   // ortho camera matching the HUD radar: 1 unit = RP px, centred at (cx,cy)
   camR.left=-cx/RP; camR.right=(W-cx)/RP; camR.top=cy/RP; camR.bottom=-(H-cy)/RP; camR.updateProjectionMatrix();
   cam3.aspect=W/H; cam3.updateProjectionMatrix();
@@ -584,14 +660,17 @@ function drawRadarHud(){
 }
 function draw3DHud(){
   const g=hx; g.fillStyle='#555'; g.font='10px ui-monospace,monospace'; g.textAlign='center';
-  g.fillText('DRAG ORBIT · PINCH ZOOM · DOUBLE-TAP RESET',W/2,H*0.13);
+  g.fillText('DRAG ORBIT · PINCH ZOOM · DOUBLE-TAP RESET',W/2,H*0.175);
   // compass strip
-  const y=H*0.16; g.strokeStyle='#333'; g.beginPath(); g.moveTo(20,y); g.lineTo(W-20,y); g.stroke();
-  const camYaw=S.heading+orbit.yaw;
+  const y=H*0.205; g.strokeStyle='#333'; g.beginPath(); g.moveTo(20,y); g.lineTo(W-20,y); g.stroke();
+  const camYaw=(S.camYaw??S.heading)+orbit.yaw;
   for(let d=0;d<360;d+=15){ let a=((d*D2R-camYaw+Math.PI*3)%(Math.PI*2))-Math.PI; if(Math.abs(a)>1.2) continue;
     const x=W/2+a/1.2*(W/2-20); g.strokeStyle=d%90?'#444':'#ccc'; g.beginPath(); g.moveTo(x,y-(d%90?3:6)); g.lineTo(x,y+(d%90?3:6)); g.stroke();
     if(d%90===0){ g.fillStyle='#ddd'; g.fillText('NESW'[d/90],x,y+16); } }
   g.fillStyle='#fff'; g.beginPath(); g.moveTo(W/2,y-8); g.lineTo(W/2-5,y-15); g.lineTo(W/2+5,y-15); g.fill();
+  if(son.on){ const v=new THREE.Vector3(); g.fillStyle='#8a8a8a'; g.font='10px ui-monospace,monospace';
+    for(let m=1;m<=4;m++){ const r=m/4*2.85, yaw=(S.camYaw??0)+orbit.yaw+Math.PI*0.25; v.set(Math.sin(yaw)*r,0,-Math.cos(yaw)*r).project(cam3);
+      if(v.z<1) g.fillText(m+' m',(v.x+1)/2*W,(1-v.y)/2*H); } }
   S.peakTxt = (()=>{ let pk=0,pi=-1; for(let i=0;i<ENV_N;i++) if(env[i]>pk){pk=env[i];pi=i;} return pk>3?`${String(Math.round(pi*5+2.5)).padStart(3,'0')}° +${pk.toFixed(0)}`:'---'; })();
 }
 const specPeak=new Float32Array(160);
@@ -617,7 +696,10 @@ function drawSpectrum(){
 
 // ---------- 3D camera (follows pointing direction) ----------
 function update3DCam(){
-  const yaw=S.heading+orbit.yaw, p=orbit.pitch, d=orbit.dist;
+  if(S.camYaw==null) S.camYaw=S.heading;
+  S.camYaw = wrap2pi(S.camYaw + angDiff(S.heading,S.camYaw)*0.12);   // smoothed follow, kills compass jitter
+  meterRings.visible = son.on;
+  const yaw=S.camYaw+orbit.yaw, p=orbit.pitch, d=orbit.dist;
   const fx=Math.sin(yaw), fz=-Math.cos(yaw);       // forward on the ground plane
   cam3.position.set(-fx*d*Math.cos(p), 0.15+d*Math.sin(p), -fz*d*Math.cos(p));
   cam3.lookAt(fx*0.9, -0.7, fz*0.9);
@@ -651,8 +733,48 @@ let wakeLock=null;
 async function wake(){ try{ if('wakeLock' in navigator && document.visibilityState==='visible' && !wakeLock){ wakeLock=await navigator.wakeLock.request('screen'); wakeLock.addEventListener('release',()=>{ wakeLock=null; }); } }catch(e){} }
 document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible' && S.running) wake(); });
 function msg(t){ $('msg').textContent=t; }
+let frontTap=0;
+$('front').onclick=()=>{
+  const n=performance.now(), old=ori.offset;
+  if(n-frontTap<450 && !ori.src.includes('RELATIVE')){ ori.offset=0; msg('Back to compass: 0° = north'); }
+  else if(DEMO){ ori.offset=0; msg('Demo: SET FRONT re-zeros heading on a real phone'); }
+  else { ori.offset=ori.rawHdg; msg('Front set: where you point now = 0°. Double-tap to go back to compass north.'); }
+  frontTap=n; const d=ori.offset-old;
+  if(d){ for(let i=0;i<CAP;i++) aData[i*4]-=d; attrData.clearUpdateRanges(); attrData.needsUpdate=true; env.fill(0); }
+  S.heading=wrap2pi(ori.rawHdg-ori.offset);
+};
+document.addEventListener('pointerdown',()=>{ if(ac && ac.state!=='running') ac.resume().catch(()=>{}); },true);
+let diagOn=false, diagT=0, tdBuf=null;
+$('diag').onclick=()=>{ diagOn=!diagOn; $('diagp').classList.toggle('hide',!diagOn); $('diag').className=diagOn?'on':''; if(diagOn) updateDiag(); };
+function diagText(){
+  const f=(v,d=1)=>v==null||!isFinite(v)?'--':(+v).toFixed(d), st=son.st;
+  let rms='--'; if(an){ tdBuf=tdBuf||new Float32Array(an.fftSize); an.getFloatTimeDomainData(tdBuf); let s=0; for(const v of tdBuf) s+=v*v; rms=f(10*Math.log10(s/tdBuf.length+1e-20))+' dBFS'; }
+  let alive=0, sonAlive=0; for(let i=0;i<CAP;i++) if(S.now-aMeta[i*3]<FADE){ alive++; if(aMeta[i*3+2]>0.5) sonAlive++; }
+  const L=[];
+  L.push(`FIELD VISION DIAG ${VERSION} ${new Date().toISOString()}${DEMO?' DEMO':''}`);
+  L.push(`DEVICE ${navigator.userAgent}`);
+  L.push(`SCREEN ${W}x${H} css · dpr ${devicePixelRatio} (used ${DPR}) · orientation ${screen.orientation?screen.orientation.type+' '+screen.orientation.angle:'n/a'}`);
+  L.push(`AUDIO ctx ${ac?ac.state:'none'} · sampleRate ${ac?ac.sampleRate:'--'} · channels ${S.micCh||'--'} · base latency ${ac&&ac.baseLatency!=null?f(ac.baseLatency*1000)+' ms':'--'}`);
+  L.push(`MIC ${S.micSettings||'--'}`);
+  L.push(`MIC LEVEL rms ${rms} · bands above floor L/M/H/U ${S.bandAbove.map(v=>f(v)).join('/')} dB · calibrating ${cal.active}`);
+  L.push(`ORIENT source ${ori.src} · events/s absolute ${ori.rateAbs} relative ${ori.rateRel}`);
+  L.push(`ORIENT raw alpha ${f(ori.raw[0])} beta ${f(ori.raw[1])} gamma ${f(ori.raw[2])} · heading ${f(S.heading*R2D)}° elev ${f(S.elev*R2D)}° · front offset ${f(ori.offset*R2D)}°`);
+  L.push(`WEBGL ${glDiag.info}${glDiag.err?' · ERROR '+glDiag.err:''} · view ${S.view} · canvas ${$('gl').width}x${$('gl').height} · fps ${fps}`);
+  L.push(`PARTICLES alive ${alive} (echo ${sonAlive}) of ${CAP} · passive ${common.uShowP.value?'shown':'hidden'} · echo ${common.uShowS.value?'shown':'hidden'}`);
+  L.push(`SONAR ${son.on?'ON':'off'} · ready ${son.ready} · ${SFREQ[sfIdx].label} ${SON.f0/1000}-${SON.f1/1000} kHz · gain ${SON.gain} · sens ${SSENS[ssIdx].label}`);
+  L.push(`SONAR pings sent ${st.sent} · played ${st.played} · processed ok ${st.ok} rejected ${st.rej} · echoes plotted ${st.echo}`);
+  L.push(`SONAR direct-path ${f(st.D,3)} · noise floor ${f(st.floor,4)} · direct/floor ${st.floor?f(st.D/st.floor):'--'}x · best echo ${f(st.best)}x floor (threshold ${f(st.thrX)}x)`);
+  L.push(`SONAR round-trip latency ${son.lat!=null&&ac?f(son.lat/ac.sampleRate*1000)+' ms (locked)':'learning'} · no-direct streak ${son.noDirect}`);
+  L.push(`SONAR last range ${st.last!=null?f(st.last,2)+' m':'--'} (${st.lastT>0?f(S.now-st.lastT)+' s ago':'never'}) · status ${st.state||'--'}${st.why?' · last reject: '+st.why:''}`);
+  L.push(`ERRORS ${(window.__fvErr||[]).join(' | ')||'none'}`);
+  return L.join('\n');
+}
+function updateDiag(){ try{ $('diagt').textContent=diagText(); }catch(e){ $('diagt').textContent='diag error: '+e.message; } }
+$('copyd').onclick=async()=>{ const t=diagText();
+  try{ await navigator.clipboard.writeText(t); msg('Diagnostics copied. Paste them to Grok Bot.'); }
+  catch(e){ const ta=document.createElement('textarea'); ta.value=t; document.body.appendChild(ta); ta.select(); try{ document.execCommand('copy'); msg('Diagnostics copied.'); }catch(_){ msg('Copy blocked: long-press the text to select it.'); } ta.remove(); } };
 document.querySelectorAll('#bands button').forEach(b=>b.onclick=()=>{ const i=+b.dataset.b; bandOn[i]=!bandOn[i]; b.className=bandOn[i]?'on':'dim'; });
-$('view').onclick=()=>{ S.view=S.view==='radar'?'3d':'radar'; $('view').textContent=S.view==='radar'?'3D':'RADAR'; $('mode').textContent=S.view==='radar'?'RADAR · HEADING-UP':'3D · FOLLOW POINTER'; };
+$('view').onclick=()=>{ S.view=S.view==='radar'?'3d':'radar'; resize(); S.camYaw=S.heading; $('view').textContent=S.view==='radar'?'3D':'RADAR'; $('mode').textContent=S.view==='radar'?'RADAR · HEADING-UP':'3D · FOLLOW POINTER'; };
 $('cal').onclick=()=>{ if(DEMO){msg('Demo: floor simulated'); return;} if(an) startCal(); };
 $('sens').onclick=()=>{ sensIdx=(sensIdx+1)%SENS.length; $('sens').textContent='SENS '+(sensIdx+1); msg(['Low sensitivity: only strong sounds','Balanced','High sensitivity: faint sounds too'][sensIdx]); };
 $('clear').onclick=()=>{ clearParticles(); log.length=0; msg('Cleared'); };
@@ -660,10 +782,11 @@ $('csv').onclick=exportCsv;
 
 $('start').onclick=async()=>{
   $('start').textContent='…'; wake();
+  if(!DEMO && !ac){ try{ ac=new (window.AudioContext||window.webkitAudioContext)({latencyHint:'interactive'}); ac.resume(); }catch(e){} }
   try{
     if(!DEMO){ await initOrientation(); await initAudio(); }
     $('overlay').classList.add('hide'); S.running=true;
-    if(!DEMO){ startCal(); setTimeout(()=>{ if(!S.hasOri) msg('No compass found: drag the radar to turn. Sound still maps.'); },2500); }
+    if(!DEMO){ startCal(); setTimeout(()=>{ if(!S.hasOri) msg('No orientation events at all: drag the radar to turn. Tap DIAG for details.'); },2500); }
   }catch(err){ $('start').textContent='START'; msg('Mic blocked: '+(err.message||err)+'. Allow microphone and retry.'); }
 };
 
@@ -672,19 +795,26 @@ let last=performance.now(), frames=0, fpsT=0, fps=0;
 function frame(now){
   requestAnimationFrame(frame);
   const dt=Math.min(0.1,(now-last)/1000); last=now; S.now=(now-S.t0)/1000;
-  frames++; if(now-fpsT>1000){ fps=frames; frames=0; fpsT=now; }
+  frames++; if(now-fpsT>1000){ fps=frames; frames=0; fpsT=now; ori.rateAbs=ori.nAbs; ori.rateRel=ori.nRel; ori.nAbs=ori.nRel=0; }
+  try{ step(now,dt); }catch(e){ const m='loop: '+(e.message||e); const E=window.__fvErr; if(E[E.length-1]?.indexOf(m)<0||!E.length) E.push(new Date().toISOString().slice(11,19)+' '+m); if(E.length>12) E.shift(); }
+}
+function step(now,dt){
   if(S.running){
     if(DEMO) demoMotion();
     analyse(); emit(dt); logRow();
     if(DEMO){ if(son.on) demoSonar(); } else sonarTick();
-    if(son.on && now-son.msgT>500){ son.msgT=now; const st=son.st; msg(`SONAR ${DEMO?'(sim) ':''}18–21 kHz · pings ${st.sent} · kept ${st.ok} · rejected ${st.rej}${st.why?' ('+st.why+')':''} · echo ${st.last?st.last.toFixed(2)+' m':'--'}`); }
+    if(son.on && now-son.msgT>250){ son.msgT=now; const st=son.st, fresh=st.last!=null && S.now-st.lastT<2.5;
+      $('rRange').textContent = fresh ? st.last.toFixed(2)+' m' : '--';
+      $('rWhy').textContent = fresh ? `${SFREQ[sfIdx].label} · ${SSENS[ssIdx].label}` : (st.state||'waiting for first ping');
+      msg(`SONAR ${DEMO?'(sim) ':''}${SON.f0/1000}–${SON.f1/1000} kHz · pings ${st.sent} · kept ${st.ok} · rejected ${st.rej} · plotted ${st.echo}`); }
+    if(diagOn && now-diagT>250){ diagT=now; updateDiag(); }
   }
   S.sweep=(S.sweep+dt*2.1)%(Math.PI*2);
   flushParticles();
   common.uTime.value=S.now; common.uHead.value=S.heading; common.uSweep.value=S.sweep;
   hx.clearRect(0,0,W,H);
-  if(S.view==='radar'){ renderer.render(sceneR,camR); drawRadarHud(); }
-  else { update3DCam(); renderer.render(scene3,cam3); draw3DHud(); }
+  if(S.view==='radar'){ if(renderer) renderer.render(sceneR,camR); drawRadarHud(); }
+  else { update3DCam(); if(renderer) renderer.render(scene3,cam3); draw3DHud(); }
   drawSpectrum();
   if(night){ for(const [c,w,h] of [[hx,W,H],[sx,spec.width,spec.height]]){ c.save(); c.setTransform(1,0,0,1,0,0); c.globalCompositeOperation='destination-out'; c.fillStyle='rgba(0,0,0,0.5)'; c.fillRect(0,0,c.canvas.width,c.canvas.height); c.restore(); } }
   // readouts
@@ -702,7 +832,7 @@ resize();
 if(DEMO){
   // pre-fill ~25 s of sweeping so the map is populated immediately
   S.running=true; $('overlay').classList.add('hide'); msg('DEMO · synthetic sources at 040° voice, 205° hum, 300° whine, 120° traffic');
-  const save=S.t0; son.on=true; $('sonar').className='on';
+  const save=S.t0; son.on=true; $('sonar').className='on'; $('range').classList.remove('hide');
   for(let k=0;k<25*30;k++){ S.now=k/30; demoMotion(); analyse(); emit(1/30); demoSonar(); }
   son.demoNext=0;
   S.t0=performance.now()-25000; flushParticles(); head=head; dirtyFrom=0; dirtyCount=CAP; flushParticles();
