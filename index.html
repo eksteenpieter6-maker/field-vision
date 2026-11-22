@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<title>FIELD VISION v1</title>
+<link rel="icon" href="data:,">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:#000;color:#fff;overflow:hidden;font:300 12px/1.45 ui-monospace,"Roboto Mono","DejaVu Sans Mono",Menlo,monospace;-webkit-user-select:none;user-select:none;touch-action:none}
+canvas{display:block;position:fixed;inset:0}
+#ui{position:fixed;inset:0;pointer-events:none}
+#hud{position:absolute;top:calc(10px + env(safe-area-inset-top));left:12px;white-space:pre;letter-spacing:.04em;text-shadow:0 0 4px #000}
+#hud b{font-weight:400;letter-spacing:.2em}
+#msg{position:absolute;top:calc(10px + env(safe-area-inset-top));right:12px;max-width:46%;text-align:right;color:#aaa;font-size:11px;white-space:pre-wrap}
+#bar{position:absolute;left:0;right:0;bottom:calc(12px + env(safe-area-inset-bottom));display:flex;flex-wrap:wrap;gap:6px;justify-content:center;padding:0 8px;pointer-events:auto}
+button{font:inherit;color:#fff;background:rgba(0,0,0,.55);border:1px solid #fff;padding:9px 11px;letter-spacing:.14em;border-radius:0;min-width:56px}
+button.on{background:#fff;color:#000}
+button:disabled{opacity:.35}
+#start{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);pointer-events:auto;text-align:center}
+#start button{font-size:15px;padding:16px 28px;letter-spacing:.3em}
+#start p{margin-top:14px;color:#888;font-size:11px;line-height:1.6}
+.hide{display:none!important}
+</style>
+</head><body>
+<div id="ui">
+  <div id="hud"></div>
+  <div id="msg"></div>
+  <div id="start"><button id="go">START</button><p>FIELD VISION v1<br>MAGNETIC + ACOUSTIC PARTICLE MAP<br>sweep the phone slowly around you</p></div>
+  <div id="bar" class="hide">
+    <button data-m="MAG">MAG</button><button data-m="SOUND">SOUND</button><button data-m="DUAL" class="on">DUAL</button>
+    <button id="cal">CAL</button><button id="clr">CLEAR</button><button id="csv">CSV</button><button id="ar" class="hide">AR</button>
+  </div>
+</div>
+<script type="module">
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+const $=id=>document.getElementById(id);
+const Q=new URLSearchParams(location.search), DEMO=Q.get('demo')==='1';
+const CAP=5000, FADE=30, SAMPLE_MS=50;
+
+// ---------- renderer / scene ----------
+const renderer=new THREE.WebGLRenderer({antialias:true,alpha:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.setSize(innerWidth,innerHeight);
+renderer.setClearColor(0x000000,1);
+document.body.prepend(renderer.domElement);
+const scene=new THREE.Scene();
+const camera=new THREE.PerspectiveCamera(60,innerWidth/innerHeight,0.01,200);
+const orbit={th:0.6,ph:1.1,r:9};
+function placeCam(){camera.position.set(orbit.r*Math.sin(orbit.ph)*Math.sin(orbit.th),orbit.r*Math.cos(orbit.ph),orbit.r*Math.sin(orbit.ph)*Math.cos(orbit.th));camera.lookAt(0,0,0);}
+placeCam();
+
+const world=new THREE.Group(); scene.add(world); // non-AR decorations
+// starfield
+{const n=600,p=new Float32Array(n*3);for(let i=0;i<n;i++){const v=new THREE.Vector3().randomDirection().multiplyScalar(40+Math.random()*60);p.set([v.x,v.y,v.z],i*3);}
+ const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(p,3));
+ world.add(new THREE.Points(g,new THREE.PointsMaterial({color:0x555555,size:1.2,sizeAttenuation:false})));}
+// user dot + faint reference rings
+const me=new THREE.Mesh(new THREE.SphereGeometry(0.08,16,12),new THREE.MeshBasicMaterial({color:0xffffff}));world.add(me);
+for(const r of [1.2,4]){const c=new THREE.EllipseCurve(0,0,r,r).getPoints(96);const g=new THREE.BufferGeometry().setFromPoints(c);const l=new THREE.LineLoop(g,new THREE.LineBasicMaterial({color:0x222222}));l.rotation.x=Math.PI/2;world.add(l);}
+// pointer: where the phone is aiming
+const ptrG=new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(),new THREE.Vector3(0,0,-1)]);
+const ptr=new THREE.Line(ptrG,new THREE.LineBasicMaterial({color:0x777777}));world.add(ptr);
+
+// particles (ring buffer)
+const pos=new Float32Array(CAP*3),size=new Float32Array(CAP),birth=new Float32Array(CAP).fill(-1e9),inten=new Float32Array(CAP),kind=new Float32Array(CAP);
+const pg=new THREE.BufferGeometry();
+const A=(n,a,s)=>{const b=new THREE.BufferAttribute(a,s);b.setUsage(THREE.DynamicDrawUsage);pg.setAttribute(n,b);return b;};
+const aPos=A('position',pos,3),aSize=A('aSize',size,1),aBirth=A('aBirth',birth,1),aInt=A('aInt',inten,1),aKind=A('aKind',kind,1);
+const pmat=new THREE.ShaderMaterial({transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,
+ uniforms:{uTime:{value:0},uFade:{value:FADE},uScale:{value:innerHeight}},
+ vertexShader:`attribute float aSize,aBirth,aInt,aKind;uniform float uTime,uFade,uScale;varying float vA,vK;
+ void main(){vec4 mv=modelViewMatrix*vec4(position,1.);float age=uTime-aBirth;vA=aInt*exp(-age/uFade);vK=aKind;
+ gl_PointSize=max(2.,aSize*uScale/-mv.z);gl_Position=projectionMatrix*mv;}`,
+ fragmentShader:`varying float vA,vK;void main(){float d=length(gl_PointCoord-.5)*2.;float a;
+ if(vK<.5)a=smoothstep(1.,.35,d);else a=smoothstep(.22,0.,abs(d-.72))*.8;
+ a*=vA;if(a<.004)discard;gl_FragColor=vec4(vec3(a),a);}`});
+const points=new THREE.Points(pg,pmat);points.frustumCulled=false;scene.add(points);
+let head=0,count=0;
+function emit(p,s,i,k){pos[head*3]=p.x;pos[head*3+1]=p.y;pos[head*3+2]=p.z;size[head]=s;inten[head]=i;kind[head]=k;birth[head]=T();
+ head=(head+1)%CAP;count=Math.min(count+1,CAP);pg.setDrawRange(0,count);
+ for(const a of [aPos,aSize,aBirth,aInt,aKind])a.needsUpdate=true;}
+function clearP(){birth.fill(-1e9);aBirth.needsUpdate=true;head=0;count=0;pg.setDrawRange(0,0);}
+
+// ---------- state ----------
+const t0=performance.now();const T=()=>(performance.now()-t0)/1000;
+let mode='DUAL',running=false,inAR=false;
+const S={bx:0,by:0,bz:0,b:0,magOK:false,freq:0,db:-100,micOK:false,dir:new THREE.Vector3(0,0,-1),yaw:0,pitch:0,roll:0,oriOK:false,ph:new THREE.Vector3()};
+let base=null; // {b,db}
+const samples=[];
+const msg=t=>{$('msg').textContent=t;};
+
+// ---------- sensors ----------
+const qv=new THREE.Quaternion(),fwd=new THREE.Vector3();
+function setDirENU(e,n,u,roll){S.dir.set(e,u,-n).normalize();S.yaw=(Math.atan2(e,n)*180/Math.PI+360)%360;S.pitch=Math.asin(Math.max(-1,Math.min(1,u)))*180/Math.PI;S.roll=roll||0;S.oriOK=true;}
+function startOrientation(){
+ try{ if('AbsoluteOrientationSensor' in window){const s=new AbsoluteOrientationSensor({frequency:60,referenceFrame:'device'});
+   s.onreading=()=>{const q=s.quaternion;qv.set(q[0],q[1],q[2],q[3]);fwd.set(0,0,-1).applyQuaternion(qv);setDirENU(fwd.x,fwd.y,fwd.z);};
+   s.onerror=e=>{console.warn(e.error);useDOE();};s.start();return;} }catch(e){console.warn(e);}
+ useDOE();}
+function useDOE(){const h=e=>{if(e.alpha==null)return;const r=Math.PI/180,a=e.alpha*r,b=e.beta*r,g=e.gamma*r;
+  const cA=Math.cos(a),sA=Math.sin(a),cB=Math.cos(b),sB=Math.sin(b),cG=Math.cos(g),sG=Math.sin(g);
+  setDirENU(-(cA*sG+cG*sA*sB),-(sA*sG-cA*cG*sB),-(cB*cG),e.gamma);};
+ if('ondeviceorientationabsolute' in window)addEventListener('deviceorientationabsolute',h);else addEventListener('deviceorientation',h);}
+async function startMag(){
+ if(!('Magnetometer' in window)){msg('MAGNETOMETER API OFF.\nAndroid Chrome: open chrome://flags, enable\n"Generic Sensor Extra Classes", relaunch.\nSOUND mode still works.');return;}
+ try{const p=await navigator.permissions.query({name:'magnetometer'});if(p.state==='denied'){msg('Magnetometer permission denied (site settings).');return;}}catch(e){}
+ try{const m=new Magnetometer({frequency:30});
+  m.onreading=()=>{S.bx=m.x;S.by=m.y;S.bz=m.z;S.b=Math.hypot(m.x,m.y,m.z);S.magOK=true;};
+  m.onerror=e=>msg('Magnetometer error: '+e.error.name+'\n'+(e.error.name==='NotReadableError'?'No magnetometer hardware?':'Enable chrome://flags "Generic Sensor Extra Classes".'));
+  m.start();}catch(e){msg('Magnetometer failed: '+e.message);}}
+let an,fbuf,tbuf,actx;
+async function startMic(){try{const st=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}});
+ actx=new (window.AudioContext||window.webkitAudioContext)();an=actx.createAnalyser();an.fftSize=4096;an.smoothingTimeConstant=.5;
+ actx.createMediaStreamSource(st).connect(an);fbuf=new Float32Array(an.frequencyBinCount);tbuf=new Float32Array(an.fftSize);S.micOK=true;}
+ catch(e){msg('Microphone unavailable: '+e.message+'\nMAG mode still works.');}}
+function readMic(){if(!an)return;an.getFloatTimeDomainData(tbuf);let s=0;for(const v of tbuf)s+=v*v;S.db=Math.max(-100,20*Math.log10(Math.sqrt(s/tbuf.length)+1e-9));
+ an.getFloatFrequencyData(fbuf);const hz=actx.sampleRate/an.fftSize;let mi=0,mv=-1e9;for(let i=Math.ceil(30/hz);i<fbuf.length;i++)if(fbuf[i]>mv){mv=fbuf[i];mi=i;}S.freq=mi*hz;}
+
+// demo: synthetic sweep, magnet hotspot + sound source
+const hot=new THREE.Vector3(1,.25,-.6).normalize(),snd=new THREE.Vector3(-.8,-.1,.5).normalize();
+function demoTick(){const t=T(),yaw=t*1.1,pit=Math.sin(t*.43)*1.1;const e=Math.sin(yaw)*Math.cos(pit),n=Math.cos(yaw)*Math.cos(pit),u=Math.sin(pit);
+ setDirENU(e,n,u);const k=Math.exp(-(1-S.dir.dot(hot))*14),k2=Math.exp(-(1-S.dir.dot(snd))*10);
+ S.bx=18+260*k*e+Math.random();S.by=6+260*k*n+Math.random();S.bz=-42+260*k*u+Math.random();S.b=Math.hypot(S.bx,S.by,S.bz);S.magOK=true;
+ S.db=-58+38*k2+Math.random()*3;S.freq=220+1800*k2+Math.random()*40;S.micOK=true;}
+
+// ---------- calibration ----------
+function calibrate(){const acc=[];msg('CALIBRATING… hold still, keep away from magnets (2 s)');$('cal').disabled=true;
+ const iv=setInterval(()=>acc.push([S.b,S.db]),50);
+ setTimeout(()=>{clearInterval(iv);const n=acc.length||1;base={b:acc.reduce((a,v)=>a+v[0],0)/n,db:acc.reduce((a,v)=>a+v[1],0)/n};
+  $('cal').disabled=false;$('cal').classList.add('on');msg(`BASELINE |B| ${base.b.toFixed(1)} µT  noise ${base.db.toFixed(1)} dB\nshowing deviations`+(base.b&&(base.b<20||base.b>70)?'\n(unusual baseline: metal nearby?)':''));},2000);}
+const clamp=x=>Math.max(0,Math.min(1,x));
+function magNorm(){return base?clamp(Math.abs(S.b-base.b)/40):clamp((S.b-20)/120);}
+function sndNorm(){return base?clamp((S.db-base.db)/30):clamp((S.db+80)/60);}
+
+// ---------- sampling ----------
+const tmp=new THREE.Vector3(),camPos=new THREE.Vector3(),camDir=new THREE.Vector3();
+function sample(){if(!running)return;if(DEMO)demoTick();else readMic();
+ const doMag=mode!=='SOUND'&&S.magOK,doSnd=mode!=='MAG'&&S.micOK;
+ let px=0,py=0,pz=0;
+ if(inAR){const xc=renderer.xr.getCamera();xc.getWorldPosition(camPos);xc.getWorldDirection(camDir);tmp.copy(camPos).addScaledVector(camDir,0.12);px=tmp.x;py=tmp.y;pz=tmp.z;}
+ const jit=()=>(Math.random()-.5)*.06;
+ if(doMag){const m=magNorm();let p;
+  if(inAR)p=tmp.clone().add(new THREE.Vector3(jit()*.2,jit()*.2,jit()*.2));else{p=S.dir.clone().multiplyScalar(1.2+2.8*m);p.x+=jit();p.y+=jit();p.z+=jit();}
+  emit(p,(inAR?.012:.06)+(inAR?.03:.2)*m,.25+.75*m,0);}
+ if(doSnd){const s=sndNorm();let p;
+  if(inAR)p=tmp.clone().add(new THREE.Vector3(jit()*.3,jit()*.3+.02,jit()*.3));else{p=S.dir.clone().multiplyScalar(1.2+2.8*s);p.x+=jit();p.y+=jit();p.z+=jit();}
+  emit(p,(inAR?.02:.12)+(inAR?.04:.3)*s,(mode==='DUAL'?.18:.3)+(mode==='DUAL'?.45:.7)*s,mode==='DUAL'?1:0);}
+ if(doMag||doSnd){if(samples.length>=200000)samples.shift();
+  samples.push([(T()).toFixed(3),mode,S.bx.toFixed(2),S.by.toFixed(2),S.bz.toFixed(2),S.b.toFixed(2),base?(S.b-base.b).toFixed(2):'',S.freq.toFixed(1),S.db.toFixed(1),S.yaw.toFixed(1),S.pitch.toFixed(1),S.roll.toFixed?S.roll.toFixed(1):'',inAR?'AR':'SPHERE',px.toFixed(3),py.toFixed(3),pz.toFixed(3)]);}}
+setInterval(sample,SAMPLE_MS);
+
+function exportCSV(){const h='t_s,mode,bx_uT,by_uT,bz_uT,b_uT,b_dev_uT,freq_hz,level_db,yaw_deg,pitch_deg,roll_deg,track,pos_x_m,pos_y_m,pos_z_m\n';
+ const blob=new Blob([h+samples.map(r=>r.join(',')).join('\n')],{type:'text/csv'});const a=document.createElement('a');
+ a.href=URL.createObjectURL(blob);a.download='field-vision-'+new Date().toISOString().replace(/[:.]/g,'-')+'.csv';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),4000);msg(samples.length+' samples exported');}
+
+// ---------- HUD ----------
+const f=(v,n=1,w=7)=>(v>=0?' ':'')+v.toFixed(n).padStart(w-1);
+function hud(){const d=base?` Δ${f(S.b-base.b,1,6)}`:'';
+ $('hud').innerHTML=`<b>FIELD VISION v1</b>  ${mode}${inAR?'  AR':''}${DEMO?'  DEMO':''}\n`+
+ (S.magOK?`|B| ${S.b.toFixed(2).padStart(7)} µT${d}\n X${f(S.bx)}  Y${f(S.by)}  Z${f(S.bz)}`:'|B|  ---  (no magnetometer)\n')+'\n'+
+ (S.micOK?` f ${S.freq.toFixed(0).padStart(6)} Hz   L ${S.db.toFixed(1).padStart(6)} dB${base?' Δ'+f(S.db-base.db,1,6):''}`:' f  ---  (no mic)')+'\n'+
+ (S.oriOK?` YAW ${S.yaw.toFixed(0).padStart(3)}°  PITCH ${f(S.pitch,0,4)}°`:' ORIENTATION ---')+'\n'+
+ ` PTS ${count}/${CAP}  N ${samples.length}`;}
+
+// ---------- touch orbit ----------
+const tp=new Map();let pinch0=0,r0=0;
+const el=renderer.domElement;
+el.addEventListener('pointerdown',e=>{tp.set(e.pointerId,{x:e.clientX,y:e.clientY});if(tp.size===2){const[a,b]=[...tp.values()];pinch0=Math.hypot(a.x-b.x,a.y-b.y);r0=orbit.r;}});
+el.addEventListener('pointermove',e=>{const p=tp.get(e.pointerId);if(!p)return;
+ if(tp.size===1){orbit.th-=(e.clientX-p.x)*.008;orbit.ph=Math.max(.05,Math.min(Math.PI-.05,orbit.ph-(e.clientY-p.y)*.008));}
+ p.x=e.clientX;p.y=e.clientY;
+ if(tp.size===2){const[a,b]=[...tp.values()];const d=Math.hypot(a.x-b.x,a.y-b.y);if(pinch0)orbit.r=Math.max(1.5,Math.min(40,r0*pinch0/d));}
+ placeCam();});
+const up=e=>{tp.delete(e.pointerId);pinch0=0;};el.addEventListener('pointerup',up);el.addEventListener('pointercancel',up);
+el.addEventListener('wheel',e=>{orbit.r=Math.max(1.5,Math.min(40,orbit.r*(1+e.deltaY*.001)));placeCam();},{passive:true});
+
+// ---------- WebXR AR ----------
+let veil;
+async function checkAR(){try{if(navigator.xr&&await navigator.xr.isSessionSupported('immersive-ar'))$('ar').classList.remove('hide');}catch(e){}}
+async function startAR(){
+ if(inAR){renderer.xr.getSession()?.end();return;}
+ try{const s=await navigator.xr.requestSession('immersive-ar',{optionalFeatures:['dom-overlay','local-floor'],domOverlay:{root:$('ui')}});
+  renderer.xr.enabled=true;renderer.xr.setReferenceSpaceType('local');await renderer.xr.setSession(s);
+  inAR=true;clearP();world.visible=false;renderer.setClearColor(0x000000,0);$('ar').classList.add('on');
+  // dark veil over the camera feed keeps the view near-monochrome
+  veil=new THREE.Mesh(new THREE.PlaneGeometry(4,4),new THREE.MeshBasicMaterial({color:0,transparent:true,opacity:.72,depthWrite:false,depthTest:false}));
+  veil.position.z=-.5;veil.renderOrder=-1;camera.add(veil);scene.add(camera);
+  msg('AR: particles pin where the phone is.\nWalk & sweep slowly.');
+  s.addEventListener('end',()=>{inAR=false;renderer.xr.enabled=false;world.visible=true;renderer.setClearColor(0x000000,1);camera.remove(veil);scene.remove(camera);
+   $('ar').classList.remove('on');clearP();placeCam();renderer.setSize(innerWidth,innerHeight);msg('AR ended');});
+ }catch(e){msg('AR failed: '+e.message);}}
+
+// ---------- UI ----------
+document.querySelectorAll('[data-m]').forEach(b=>b.onclick=()=>{mode=b.dataset.m;document.querySelectorAll('[data-m]').forEach(x=>x.classList.toggle('on',x===b));});
+$('cal').onclick=calibrate;$('clr').onclick=()=>{clearP();samples.length=0;msg('cleared');};$('csv').onclick=exportCSV;$('ar').onclick=startAR;
+async function start(){
+ $('start').classList.add('hide');$('bar').classList.remove('hide');
+ if(!DEMO){
+  if(!isSecureContext)msg('Needs HTTPS for sensors.');
+  try{if(window.DeviceOrientationEvent?.requestPermission)await DeviceOrientationEvent.requestPermission();if(window.DeviceMotionEvent?.requestPermission)await DeviceMotionEvent.requestPermission();}catch(e){}
+  for(const n of ['accelerometer','gyroscope','magnetometer'])try{await navigator.permissions.query({name:n});}catch(e){}
+  startOrientation();await startMag();await startMic();checkAR();}
+ running=true;}
+$('go').onclick=start;
+if(DEMO)start();
+
+addEventListener('resize',()=>{if(inAR)return;camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);pmat.uniforms.uScale.value=innerHeight;});
+let lh=0;
+renderer.setAnimationLoop(()=>{const t=T();pmat.uniforms.uTime.value=t;
+ if(!inAR){ptrG.attributes.position.setXYZ(1,S.dir.x*1.2,S.dir.y*1.2,S.dir.z*1.2);ptrG.attributes.position.needsUpdate=true;
+  if(!tp.size&&!running){orbit.th+=.002;placeCam();}}
+ if(t-lh>.1){hud();lh=t;}
+ renderer.render(scene,camera);window.__frames=(window.__frames||0)+1;});
+</script>
+</body></html>
