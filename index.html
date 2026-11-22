@@ -1,216 +1,546 @@
 <!doctype html>
-<html lang="en"><head>
+<html lang="en">
+<head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#000000">
-<title>FIELD VISION v1</title>
 <link rel="icon" href="data:,">
+<title>Field Vision · Sound Radar</title>
 <style>
-*{box-sizing:border-box;margin:0;padding:0}
-html,body{height:100%;background:#000;color:#fff;overflow:hidden;font:300 12px/1.45 ui-monospace,"Roboto Mono","DejaVu Sans Mono",Menlo,monospace;-webkit-user-select:none;user-select:none;touch-action:none}
-canvas{display:block;position:fixed;inset:0}
-#ui{position:fixed;inset:0;pointer-events:none}
-#hud{position:absolute;top:calc(10px + env(safe-area-inset-top));left:12px;white-space:pre;letter-spacing:.04em;text-shadow:0 0 4px #000}
-#hud b{font-weight:400;letter-spacing:.2em}
-#msg{position:absolute;top:calc(10px + env(safe-area-inset-top));right:12px;max-width:46%;text-align:right;color:#aaa;font-size:11px;white-space:pre-wrap}
-#bar{position:absolute;left:0;right:0;bottom:calc(12px + env(safe-area-inset-bottom));display:flex;flex-wrap:wrap;gap:6px;justify-content:center;padding:0 8px;pointer-events:auto}
-button{font:inherit;color:#fff;background:rgba(0,0,0,.55);border:1px solid #fff;padding:9px 11px;letter-spacing:.14em;border-radius:0;min-width:56px}
-button.on{background:#fff;color:#000}
-button:disabled{opacity:.35}
-#start{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);pointer-events:auto;text-align:center}
-#start button{font-size:15px;padding:16px 28px;letter-spacing:.3em}
-#start p{margin-top:14px;color:#888;font-size:11px;line-height:1.6}
+:root{--w:#e8e8e8;--g:#8a8a8a;--d:#3a3a3a}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none}
+html,body{margin:0;height:100%;background:#000;color:var(--w);font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;overflow:hidden;touch-action:none}
+#gl,#hud{position:fixed;inset:0;width:100%;height:100%;display:block}
+#hud{pointer-events:none}
+.top{position:fixed;top:0;left:0;right:0;padding:calc(env(safe-area-inset-top) + 10px) 14px 6px;display:flex;justify-content:space-between;align-items:flex-start;pointer-events:none;background:linear-gradient(#000 40%,transparent)}
+.title{font-size:11px;letter-spacing:.32em;color:var(--g)}
+.title b{display:block;color:var(--w);font-size:15px;letter-spacing:.24em;margin-top:2px}
+.read{display:grid;grid-template-columns:auto auto;gap:1px 10px;text-align:right;font-size:11px;color:var(--g)}
+.read span:nth-child(even){color:var(--w);font-size:14px;min-width:78px}
+.bot{position:fixed;left:0;right:0;bottom:0;padding:6px 10px calc(env(safe-area-inset-bottom) + 10px);background:linear-gradient(transparent,#000 30%)}
+.row{display:flex;gap:7px;margin-top:7px}
+button{flex:1;min-height:48px;background:#000;color:var(--w);border:1px solid #555;border-radius:10px;font:600 12px/1 inherit;letter-spacing:.14em;padding:0 4px}
+button:active{background:#222}
+button.on{background:#e8e8e8;color:#000;border-color:#e8e8e8}
+button.dim{color:#666;border-color:#2a2a2a}
+#start{min-height:58px;font-size:15px;letter-spacing:.3em;border-color:#e8e8e8}
+#msg{font-size:11px;color:var(--g);text-align:center;min-height:14px;margin-top:2px;line-height:1.35}
+#spec{display:block;width:100%;height:58px}
 .hide{display:none!important}
+#overlay{position:fixed;inset:0;display:flex;flex-direction:column;justify-content:center;align-items:center;padding:30px;text-align:center;background:rgba(0,0,0,.86);z-index:5}
+#overlay h1{font-size:20px;letter-spacing:.35em;margin:0 0 6px;font-weight:600}
+#overlay p{color:var(--g);font-size:12px;line-height:1.6;max-width:340px;margin:6px 0}
+#overlay button{flex:none;width:min(320px,80vw);margin-top:18px}
 </style>
-</head><body>
-<div id="ui">
-  <div id="hud"></div>
-  <div id="msg"></div>
-  <div id="start"><button id="go">START</button><p>FIELD VISION v1<br>MAGNETIC + ACOUSTIC PARTICLE MAP<br>sweep the phone slowly around you</p></div>
-  <div id="bar" class="hide">
-    <button data-m="MAG">MAG</button><button data-m="SOUND">SOUND</button><button data-m="DUAL" class="on">DUAL</button>
-    <button id="cal">CAL</button><button id="clr">CLEAR</button><button id="csv">CSV</button><button id="ar" class="hide">AR</button>
+</head>
+<body>
+<canvas id="gl"></canvas>
+<canvas id="hud"></canvas>
+
+<div class="top">
+  <div class="title">FIELD VISION<b>SOUND RADAR</b><span id="mode" style="font-size:10px;letter-spacing:.2em">RADAR · HEADING-UP</span></div>
+  <div class="read">
+    <span>LEVEL</span><span id="rDb">-- dB</span>
+    <span>FREQ</span><span id="rHz">-- Hz</span>
+    <span>HDG</span><span id="rHdg">---°</span>
+    <span>ELEV</span><span id="rEl">--°</span>
+    <span>PEAK</span><span id="rPk">---</span>
+    <span id="rStL">MIC</span><span id="rSt">--</span>
   </div>
 </div>
+
+<div class="bot">
+  <canvas id="spec"></canvas>
+  <div id="msg"></div>
+  <div class="row" id="bands">
+    <button class="on" data-b="0">LOW</button><button class="on" data-b="1">MID</button><button class="on" data-b="2">HIGH</button><button class="on" data-b="3">ULTRA</button>
+  </div>
+  <div class="row">
+    <button id="view">3D</button><button id="cal">CAL</button><button id="sens">SENS 2</button><button id="clear">CLEAR</button><button id="csv">CSV</button>
+  </div>
+</div>
+
+<div id="overlay">
+  <h1>SOUND RADAR</h1>
+  <p>Point the top of your phone like a torch. Sweep slowly around you. Loud or interesting directions build up dense particle clouds.</p>
+  <p>Hold the phone at arm's length with your body behind it: your body blocks sound from behind, which sharpens direction.</p>
+  <p style="font-size:10px">Silent. Nothing is ever played through the speaker.</p>
+  <button id="start">START</button>
+</div>
+
 <script type="module">
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
-const $=id=>document.getElementById(id);
-const Q=new URLSearchParams(location.search), DEMO=Q.get('demo')==='1';
-const CAP=5000, FADE=30, SAMPLE_MS=50;
 
-// ---------- renderer / scene ----------
-const renderer=new THREE.WebGLRenderer({antialias:true,alpha:true});
-renderer.setPixelRatio(Math.min(devicePixelRatio,2));
-renderer.setSize(innerWidth,innerHeight);
-renderer.setClearColor(0x000000,1);
-document.body.prepend(renderer.domElement);
-const scene=new THREE.Scene();
-const camera=new THREE.PerspectiveCamera(60,innerWidth/innerHeight,0.01,200);
-const orbit={th:0.6,ph:1.1,r:9};
-function placeCam(){camera.position.set(orbit.r*Math.sin(orbit.ph)*Math.sin(orbit.th),orbit.r*Math.cos(orbit.ph),orbit.r*Math.sin(orbit.ph)*Math.cos(orbit.th));camera.lookAt(0,0,0);}
-placeCam();
-
-const world=new THREE.Group(); scene.add(world); // non-AR decorations
-// starfield
-{const n=600,p=new Float32Array(n*3);for(let i=0;i<n;i++){const v=new THREE.Vector3().randomDirection().multiplyScalar(40+Math.random()*60);p.set([v.x,v.y,v.z],i*3);}
- const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(p,3));
- world.add(new THREE.Points(g,new THREE.PointsMaterial({color:0x555555,size:1.2,sizeAttenuation:false})));}
-// user dot + faint reference rings
-const me=new THREE.Mesh(new THREE.SphereGeometry(0.08,16,12),new THREE.MeshBasicMaterial({color:0xffffff}));world.add(me);
-for(const r of [1.2,4]){const c=new THREE.EllipseCurve(0,0,r,r).getPoints(96);const g=new THREE.BufferGeometry().setFromPoints(c);const l=new THREE.LineLoop(g,new THREE.LineBasicMaterial({color:0x222222}));l.rotation.x=Math.PI/2;world.add(l);}
-// pointer: where the phone is aiming
-const ptrG=new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(),new THREE.Vector3(0,0,-1)]);
-const ptr=new THREE.Line(ptrG,new THREE.LineBasicMaterial({color:0x777777}));world.add(ptr);
-
-// particles (ring buffer)
-const pos=new Float32Array(CAP*3),size=new Float32Array(CAP),birth=new Float32Array(CAP).fill(-1e9),inten=new Float32Array(CAP),kind=new Float32Array(CAP);
-const pg=new THREE.BufferGeometry();
-const A=(n,a,s)=>{const b=new THREE.BufferAttribute(a,s);b.setUsage(THREE.DynamicDrawUsage);pg.setAttribute(n,b);return b;};
-const aPos=A('position',pos,3),aSize=A('aSize',size,1),aBirth=A('aBirth',birth,1),aInt=A('aInt',inten,1),aKind=A('aKind',kind,1);
-const pmat=new THREE.ShaderMaterial({transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,
- uniforms:{uTime:{value:0},uFade:{value:FADE},uScale:{value:innerHeight}},
- vertexShader:`attribute float aSize,aBirth,aInt,aKind;uniform float uTime,uFade,uScale;varying float vA,vK;
- void main(){vec4 mv=modelViewMatrix*vec4(position,1.);float age=uTime-aBirth;vA=aInt*exp(-age/uFade);vK=aKind;
- gl_PointSize=max(2.,aSize*uScale/-mv.z);gl_Position=projectionMatrix*mv;}`,
- fragmentShader:`varying float vA,vK;void main(){float d=length(gl_PointCoord-.5)*2.;float a;
- if(vK<.5)a=smoothstep(1.,.35,d);else a=smoothstep(.22,0.,abs(d-.72))*.8;
- a*=vA;if(a<.004)discard;gl_FragColor=vec4(vec3(a),a);}`});
-const points=new THREE.Points(pg,pmat);points.frustumCulled=false;scene.add(points);
-let head=0,count=0;
-function emit(p,s,i,k){pos[head*3]=p.x;pos[head*3+1]=p.y;pos[head*3+2]=p.z;size[head]=s;inten[head]=i;kind[head]=k;birth[head]=T();
- head=(head+1)%CAP;count=Math.min(count+1,CAP);pg.setDrawRange(0,count);
- for(const a of [aPos,aSize,aBirth,aInt,aKind])a.needsUpdate=true;}
-function clearP(){birth.fill(-1e9);aBirth.needsUpdate=true;head=0;count=0;pg.setDrawRange(0,0);}
+const DEMO = new URLSearchParams(location.search).has('demo');
+const $ = id => document.getElementById(id);
+const D2R = Math.PI/180, R2D = 180/Math.PI;
+const CAP = 20000, FADE = 30.0;
+const BANDS = [
+  {name:'LOW',  lo:20,   hi:250,   r2:[0.22,0.44], r3:[1.0,1.35], shade:0.55},
+  {name:'MID',  lo:250,  hi:2000,  r2:[0.46,0.66], r3:[1.5,1.85], shade:0.75},
+  {name:'HIGH', lo:2000, hi:8000,  r2:[0.68,0.84], r3:[2.0,2.35], shade:0.9},
+  {name:'ULTRA',lo:8000, hi:22000, r2:[0.86,0.98], r3:[2.5,2.85], shade:1.0},
+];
+const bandOn = [true,true,true,true];
+const SENS = [{t:6,k:9},{t:4,k:6},{t:2.5,k:4}]; // threshold dB above floor, dB per particle
+let sensIdx = 1;
 
 // ---------- state ----------
-const t0=performance.now();const T=()=>(performance.now()-t0)/1000;
-let mode='DUAL',running=false,inAR=false;
-const S={bx:0,by:0,bz:0,b:0,magOK:false,freq:0,db:-100,micOK:false,dir:new THREE.Vector3(0,0,-1),yaw:0,pitch:0,roll:0,oriOK:false,ph:new THREE.Vector3()};
-let base=null; // {b,db}
-const samples=[];
-const msg=t=>{$('msg').textContent=t;};
+const S = {
+  running:false, t0:performance.now(),
+  heading:0, elev:0, hasOri:false, absolute:false, manualHdg:0,
+  hx:0, hy:1, // smoothed heading vector
+  bandDb:[0,0,0,0], bandAbove:[0,0,0,0], totalAbove:0, levelDbfs:-120, domHz:0,
+  peakHold:[0,0,0,0], stereo:null,
+  view:'radar', sweep:0,
+};
+const ENV_N = 72; const env = new Float32Array(ENV_N); // directional energy envelope (peak-hold per 5°)
 
-// ---------- sensors ----------
-const qv=new THREE.Quaternion(),fwd=new THREE.Vector3();
-function setDirENU(e,n,u,roll){S.dir.set(e,u,-n).normalize();S.yaw=(Math.atan2(e,n)*180/Math.PI+360)%360;S.pitch=Math.asin(Math.max(-1,Math.min(1,u)))*180/Math.PI;S.roll=roll||0;S.oriOK=true;}
-function startOrientation(){
- try{ if('AbsoluteOrientationSensor' in window){const s=new AbsoluteOrientationSensor({frequency:60,referenceFrame:'device'});
-   s.onreading=()=>{const q=s.quaternion;qv.set(q[0],q[1],q[2],q[3]);fwd.set(0,0,-1).applyQuaternion(qv);setDirENU(fwd.x,fwd.y,fwd.z);};
-   s.onerror=e=>{console.warn(e.error);useDOE();};s.start();return;} }catch(e){console.warn(e);}
- useDOE();}
-function useDOE(){const h=e=>{if(e.alpha==null)return;const r=Math.PI/180,a=e.alpha*r,b=e.beta*r,g=e.gamma*r;
-  const cA=Math.cos(a),sA=Math.sin(a),cB=Math.cos(b),sB=Math.sin(b),cG=Math.cos(g),sG=Math.sin(g);
-  setDirENU(-(cA*sG+cG*sA*sB),-(sA*sG-cA*cG*sB),-(cB*cG),e.gamma);};
- if('ondeviceorientationabsolute' in window)addEventListener('deviceorientationabsolute',h);else addEventListener('deviceorientation',h);}
-async function startMag(){
- if(!('Magnetometer' in window)){msg('MAGNETOMETER API OFF.\nAndroid Chrome: open chrome://flags, enable\n"Generic Sensor Extra Classes", relaunch.\nSOUND mode still works.');return;}
- try{const p=await navigator.permissions.query({name:'magnetometer'});if(p.state==='denied'){msg('Magnetometer permission denied (site settings).');return;}}catch(e){}
- try{const m=new Magnetometer({frequency:30});
-  m.onreading=()=>{S.bx=m.x;S.by=m.y;S.bz=m.z;S.b=Math.hypot(m.x,m.y,m.z);S.magOK=true;};
-  m.onerror=e=>msg('Magnetometer error: '+e.error.name+'\n'+(e.error.name==='NotReadableError'?'No magnetometer hardware?':'Enable chrome://flags "Generic Sensor Extra Classes".'));
-  m.start();}catch(e){msg('Magnetometer failed: '+e.message);}}
-let an,fbuf,tbuf,actx;
-async function startMic(){try{const st=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}});
- actx=new (window.AudioContext||window.webkitAudioContext)();an=actx.createAnalyser();an.fftSize=4096;an.smoothingTimeConstant=.5;
- actx.createMediaStreamSource(st).connect(an);fbuf=new Float32Array(an.frequencyBinCount);tbuf=new Float32Array(an.fftSize);S.micOK=true;}
- catch(e){msg('Microphone unavailable: '+e.message+'\nMAG mode still works.');}}
-function readMic(){if(!an)return;an.getFloatTimeDomainData(tbuf);let s=0;for(const v of tbuf)s+=v*v;S.db=Math.max(-100,20*Math.log10(Math.sqrt(s/tbuf.length)+1e-9));
- an.getFloatFrequencyData(fbuf);const hz=actx.sampleRate/an.fftSize;let mi=0,mv=-1e9;for(let i=Math.ceil(30/hz);i<fbuf.length;i++)if(fbuf[i]>mv){mv=fbuf[i];mi=i;}S.freq=mi*hz;}
+// ---------- renderer & shared particle buffer ----------
+const renderer = new THREE.WebGLRenderer({canvas:$('gl'), antialias:false, powerPreference:'high-performance'});
+renderer.setClearColor(0x000000,1);
+const DPR = Math.min(window.devicePixelRatio||1, 2);
+renderer.setPixelRatio(DPR);
 
-// demo: synthetic sweep, magnet hotspot + sound source
-const hot=new THREE.Vector3(1,.25,-.6).normalize(),snd=new THREE.Vector3(-.8,-.1,.5).normalize();
-function demoTick(){const t=T(),yaw=t*1.1,pit=Math.sin(t*.43)*1.1;const e=Math.sin(yaw)*Math.cos(pit),n=Math.cos(yaw)*Math.cos(pit),u=Math.sin(pit);
- setDirENU(e,n,u);const k=Math.exp(-(1-S.dir.dot(hot))*14),k2=Math.exp(-(1-S.dir.dot(snd))*10);
- S.bx=18+260*k*e+Math.random();S.by=6+260*k*n+Math.random();S.bz=-42+260*k*u+Math.random();S.b=Math.hypot(S.bx,S.by,S.bz);S.magOK=true;
- S.db=-58+38*k2+Math.random()*3;S.freq=220+1800*k2+Math.random()*40;S.micOK=true;}
+const geo = new THREE.BufferGeometry();
+const aData = new Float32Array(CAP*4);   // heading(rad), elev(rad), r2d, r3d
+const aMeta = new Float32Array(CAP*2);   // birth(s), intensity*shade
+for(let i=0;i<CAP;i++) aMeta[i*2] = -1e6;
+const attrData = new THREE.BufferAttribute(aData,4).setUsage(THREE.DynamicDrawUsage);
+const attrMeta = new THREE.BufferAttribute(aMeta,2).setUsage(THREE.DynamicDrawUsage);
+geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(CAP*3),3)); // unused, required
+geo.setAttribute('aData', attrData);
+geo.setAttribute('aMeta', attrMeta);
+geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 1e5);
+let head = 0, dirtyFrom = -1, dirtyCount = 0;
 
-// ---------- calibration ----------
-function calibrate(){const acc=[];msg('CALIBRATING… hold still, keep away from magnets (2 s)');$('cal').disabled=true;
- const iv=setInterval(()=>acc.push([S.b,S.db]),50);
- setTimeout(()=>{clearInterval(iv);const n=acc.length||1;base={b:acc.reduce((a,v)=>a+v[0],0)/n,db:acc.reduce((a,v)=>a+v[1],0)/n};
-  $('cal').disabled=false;$('cal').classList.add('on');msg(`BASELINE |B| ${base.b.toFixed(1)} µT  noise ${base.db.toFixed(1)} dB\nshowing deviations`+(base.b&&(base.b<20||base.b>70)?'\n(unusual baseline: metal nearby?)':''));},2000);}
-const clamp=x=>Math.max(0,Math.min(1,x));
-function magNorm(){return base?clamp(Math.abs(S.b-base.b)/40):clamp((S.b-20)/120);}
-function sndNorm(){return base?clamp((S.db-base.db)/30):clamp((S.db+80)/60);}
+const common = {
+  uTime:{value:0}, uFade:{value:FADE}, uSize:{value:1.6*DPR}, uHead:{value:0}, uSweep:{value:0}, uScale:{value:1},
+};
+const FRAG = `
+precision highp float;
+varying float vA;
+void main(){
+  vec2 p = gl_PointCoord*2.0-1.0; float r = dot(p,p);
+  if(r>1.0) discard;
+  float core = smoothstep(0.55,0.25,r);       // crisp core
+  float glow = (1.0-r)*0.18;                  // very faint halo
+  float a = (core+glow)*vA;
+  gl_FragColor = vec4(vec3(a),1.0);
+}`;
+const VCOMMON = `
+attribute vec4 aData; attribute vec2 aMeta;
+uniform float uTime,uFade,uSize,uHead,uSweep,uScale;
+varying float vA;
+float lifeA(){ float age=uTime-aMeta.x; if(age<0.0||age>uFade) return 0.0; float f=1.0-age/uFade; return f*f*aMeta.y; }
+`;
+const matRadar = new THREE.ShaderMaterial({
+  uniforms:common, transparent:true, depthWrite:false, depthTest:false, blending:THREE.AdditiveBlending,
+  vertexShader: VCOMMON+`
+  void main(){
+    float a=lifeA(); if(a<=0.0){gl_Position=vec4(2.0,2.0,2.0,1.0);gl_PointSize=0.0;vA=0.0;return;}
+    float d=aData.x-uHead;                       // heading-up: forward = screen up
+    vec2 p=vec2(sin(d),cos(d))*aData.z;
+    float sw=mod(uSweep-aData.x,6.28318);        // brighten just behind the rotating sweep
+    float boost=1.0+1.6*exp(-sw*3.0);
+    vA=min(a*boost,1.0);
+    gl_Position=projectionMatrix*modelViewMatrix*vec4(p,0.0,1.0);
+    gl_PointSize=uSize*(0.85+0.4*a);
+  }`, fragmentShader:FRAG });
+const mat3D = new THREE.ShaderMaterial({
+  uniforms:common, transparent:true, depthWrite:false, depthTest:false, blending:THREE.AdditiveBlending,
+  vertexShader: VCOMMON+`
+  void main(){
+    float a=lifeA(); if(a<=0.0){gl_Position=vec4(2.0,2.0,2.0,1.0);gl_PointSize=0.0;vA=0.0;return;}
+    float ce=cos(aData.y);
+    vec3 p=vec3(ce*sin(aData.x), sin(aData.y), -ce*cos(aData.x))*aData.w;  // x=east, y=up, -z=north
+    vec4 mv=modelViewMatrix*vec4(p,1.0);
+    vA=min(a*1.5,1.0);
+    gl_Position=projectionMatrix*mv;
+    gl_PointSize=clamp(uSize*(5.0/-mv.z),1.0,uSize*1.8);
+  }`, fragmentShader:FRAG });
 
-// ---------- sampling ----------
-const tmp=new THREE.Vector3(),camPos=new THREE.Vector3(),camDir=new THREE.Vector3();
-function sample(){if(!running)return;if(DEMO)demoTick();else readMic();
- const doMag=mode!=='SOUND'&&S.magOK,doSnd=mode!=='MAG'&&S.micOK;
- let px=0,py=0,pz=0;
- if(inAR){const xc=renderer.xr.getCamera();xc.getWorldPosition(camPos);xc.getWorldDirection(camDir);tmp.copy(camPos).addScaledVector(camDir,0.12);px=tmp.x;py=tmp.y;pz=tmp.z;}
- const jit=()=>(Math.random()-.5)*.06;
- if(doMag){const m=magNorm();let p;
-  if(inAR)p=tmp.clone().add(new THREE.Vector3(jit()*.2,jit()*.2,jit()*.2));else{p=S.dir.clone().multiplyScalar(1.2+2.8*m);p.x+=jit();p.y+=jit();p.z+=jit();}
-  emit(p,(inAR?.012:.06)+(inAR?.03:.2)*m,.25+.75*m,0);}
- if(doSnd){const s=sndNorm();let p;
-  if(inAR)p=tmp.clone().add(new THREE.Vector3(jit()*.3,jit()*.3+.02,jit()*.3));else{p=S.dir.clone().multiplyScalar(1.2+2.8*s);p.x+=jit();p.y+=jit();p.z+=jit();}
-  emit(p,(inAR?.02:.12)+(inAR?.04:.3)*s,(mode==='DUAL'?.18:.3)+(mode==='DUAL'?.45:.7)*s,mode==='DUAL'?1:0);}
- if(doMag||doSnd){if(samples.length>=200000)samples.shift();
-  samples.push([(T()).toFixed(3),mode,S.bx.toFixed(2),S.by.toFixed(2),S.bz.toFixed(2),S.b.toFixed(2),base?(S.b-base.b).toFixed(2):'',S.freq.toFixed(1),S.db.toFixed(1),S.yaw.toFixed(1),S.pitch.toFixed(1),S.roll.toFixed?S.roll.toFixed(1):'',inAR?'AR':'SPHERE',px.toFixed(3),py.toFixed(3),pz.toFixed(3)]);}}
-setInterval(sample,SAMPLE_MS);
+const sceneR = new THREE.Scene(); sceneR.add(new THREE.Points(geo, matRadar));
+const scene3 = new THREE.Scene(); const pts3 = new THREE.Points(geo, mat3D); pts3.frustumCulled=false; scene3.add(pts3);
+sceneR.children[0].frustumCulled=false;
+const camR = new THREE.OrthographicCamera(-1,1,1,-1,-10,10);
+const cam3 = new THREE.PerspectiveCamera(70,1,0.05,100);
 
-function exportCSV(){const h='t_s,mode,bx_uT,by_uT,bz_uT,b_uT,b_dev_uT,freq_hz,level_db,yaw_deg,pitch_deg,roll_deg,track,pos_x_m,pos_y_m,pos_z_m\n';
- const blob=new Blob([h+samples.map(r=>r.join(',')).join('\n')],{type:'text/csv'});const a=document.createElement('a');
- a.href=URL.createObjectURL(blob);a.download='field-vision-'+new Date().toISOString().replace(/[:.]/g,'-')+'.csv';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),4000);msg(samples.length+' samples exported');}
+// 3D scaffolding: faint shells, horizon ring, Peter's dot, pointing beam
+const scaffold = new THREE.Group(); scene3.add(scaffold);
+{
+  const lm = new THREE.LineBasicMaterial({color:0x2a2a2a});
+  for(const b of BANDS){ const r=(b.r3[0]+b.r3[1])/2; const g=new THREE.BufferGeometry().setFromPoints(new THREE.EllipseCurve(0,0,r,r).getPoints(96)); const l=new THREE.LineLoop(g,lm); l.rotation.x=-Math.PI/2; scaffold.add(l); }
+  const grid = new THREE.PolarGridHelper(3,12,4,96,0x1c1c1c,0x1c1c1c); grid.position.y=-0.9; scaffold.add(grid);
+  const me = new THREE.Mesh(new THREE.SphereGeometry(0.035,16,12), new THREE.MeshBasicMaterial({color:0xffffff})); scaffold.add(me);
+}
+const beamGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(),new THREE.Vector3(0,0,-3)]);
+const beam = new THREE.Line(beamGeo, new THREE.LineBasicMaterial({color:0x9a9a9a})); scene3.add(beam);
+const ORB0={yaw:0,pitch:0.8,dist:5.2}; const orbit = {...ORB0};
 
-// ---------- HUD ----------
-const f=(v,n=1,w=7)=>(v>=0?' ':'')+v.toFixed(n).padStart(w-1);
-function hud(){const d=base?` Δ${f(S.b-base.b,1,6)}`:'';
- $('hud').innerHTML=`<b>FIELD VISION v1</b>  ${mode}${inAR?'  AR':''}${DEMO?'  DEMO':''}\n`+
- (S.magOK?`|B| ${S.b.toFixed(2).padStart(7)} µT${d}\n X${f(S.bx)}  Y${f(S.by)}  Z${f(S.bz)}`:'|B|  ---  (no magnetometer)\n')+'\n'+
- (S.micOK?` f ${S.freq.toFixed(0).padStart(6)} Hz   L ${S.db.toFixed(1).padStart(6)} dB${base?' Δ'+f(S.db-base.db,1,6):''}`:' f  ---  (no mic)')+'\n'+
- (S.oriOK?` YAW ${S.yaw.toFixed(0).padStart(3)}°  PITCH ${f(S.pitch,0,4)}°`:' ORIENTATION ---')+'\n'+
- ` PTS ${count}/${CAP}  N ${samples.length}`;}
+function spawn(hdgRad, elRad, band, inten){
+  const b = BANDS[band], i = head;
+  const jh = (Math.random()-0.5)*0.09 + (Math.random()-0.5)*(Math.random()<0.15?0.25:0);
+  const je = (Math.random()-0.5)*0.07;
+  const t = Math.min(inten,1);
+  const r2 = b.r2[0] + (b.r2[1]-b.r2[0])*(0.15+0.7*t) + (Math.random()-0.5)*0.045;
+  const r3 = b.r3[0] + (b.r3[1]-b.r3[0])*(0.15+0.7*t) + (Math.random()-0.5)*0.07;
+  aData[i*4]=hdgRad+jh; aData[i*4+1]=elRad+je; aData[i*4+2]=r2; aData[i*4+3]=r3;
+  aMeta[i*2]=S.now; aMeta[i*2+1]=(0.25+0.75*t)*b.shade;
+  if(dirtyFrom<0){dirtyFrom=i;dirtyCount=0;} dirtyCount++;
+  head=(head+1)%CAP;
+}
+function flushParticles(){
+  if(dirtyFrom<0) return;
+  attrData.clearUpdateRanges(); attrMeta.clearUpdateRanges();
+  const n=Math.min(dirtyCount,CAP), first=Math.min(n,CAP-dirtyFrom);
+  attrData.addUpdateRange(dirtyFrom*4, first*4); attrMeta.addUpdateRange(dirtyFrom*2, first*2);
+  if(n>first){ attrData.addUpdateRange(0,(n-first)*4); attrMeta.addUpdateRange(0,(n-first)*2); }
+  attrData.needsUpdate=true; attrMeta.needsUpdate=true; dirtyFrom=-1; dirtyCount=0;
+}
+function clearParticles(){ for(let i=0;i<CAP;i++) aMeta[i*2]=-1e6; attrMeta.clearUpdateRanges(); attrMeta.needsUpdate=true; env.fill(0); S.peakHold.fill(0); }
 
-// ---------- touch orbit ----------
-const tp=new Map();let pinch0=0,r0=0;
-const el=renderer.domElement;
-el.addEventListener('pointerdown',e=>{tp.set(e.pointerId,{x:e.clientX,y:e.clientY});if(tp.size===2){const[a,b]=[...tp.values()];pinch0=Math.hypot(a.x-b.x,a.y-b.y);r0=orbit.r;}});
-el.addEventListener('pointermove',e=>{const p=tp.get(e.pointerId);if(!p)return;
- if(tp.size===1){orbit.th-=(e.clientX-p.x)*.008;orbit.ph=Math.max(.05,Math.min(Math.PI-.05,orbit.ph-(e.clientY-p.y)*.008));}
- p.x=e.clientX;p.y=e.clientY;
- if(tp.size===2){const[a,b]=[...tp.values()];const d=Math.hypot(a.x-b.x,a.y-b.y);if(pinch0)orbit.r=Math.max(1.5,Math.min(40,r0*pinch0/d));}
- placeCam();});
-const up=e=>{tp.delete(e.pointerId);pinch0=0;};el.addEventListener('pointerup',up);el.addEventListener('pointercancel',up);
-el.addEventListener('wheel',e=>{orbit.r=Math.max(1.5,Math.min(40,orbit.r*(1+e.deltaY*.001)));placeCam();},{passive:true});
+// ---------- orientation: phone as pointer ----------
+// W3C: world X=east, Y=north, Z=up. Device: x=right, y=top edge, z=out of screen. R = Rz(a)·Rx(b)·Ry(g).
+function rot(a,b,g,v){
+  let [x,y,z]=v; const ca=Math.cos(a),sa=Math.sin(a),cb=Math.cos(b),sb=Math.sin(b),cg=Math.cos(g),sg=Math.sin(g);
+  [x,z]=[cg*x+sg*z, -sg*x+cg*z];           // Ry
+  [y,z]=[cb*y-sb*z, sb*y+cb*z];            // Rx
+  [x,y]=[ca*x-sa*y, sa*x+ca*y];            // Rz
+  return [x,y,z];
+}
+function screenAngle(){ return ((screen.orientation&&screen.orientation.angle)||window.orientation||0)*D2R; }
+function onOri(e, isAbs){
+  if(e.alpha==null && e.webkitCompassHeading==null) return;
+  let alpha=e.alpha||0;
+  if(e.webkitCompassHeading!=null && !isAbs){ alpha = 360 - e.webkitCompassHeading; S.absolute=true; } // iOS
+  else if(isAbs || e.absolute) S.absolute=true;
+  if(S.gotAbs && !isAbs && e.webkitCompassHeading==null) return; // prefer the absolute stream
+  if(isAbs) S.gotAbs=true;
+  const a=alpha*D2R, b=(e.beta||0)*D2R, g=(e.gamma||0)*D2R, so=screenAngle();
+  // "top edge" of the screen as currently displayed (portrait = device top)
+  const up = rot(a,b,g,[Math.sin(so),Math.cos(so),0]);
+  const back = rot(a,b,g,[0,0,-1]);          // camera direction
+  // top edge when flat, camera direction when upright; their horizontal parts share the same azimuth
+  const v=[up[0]+back[0], up[1]+back[1], up[2]+back[2]];
+  const h=Math.hypot(v[0],v[1]); if(h<1e-4) return;
+  const k=0.25; S.hx+= (v[0]/h-S.hx)*k; S.hy+= (v[1]/h-S.hy)*k;
+  S.heading = (Math.atan2(S.hx,S.hy)+2*Math.PI)%(2*Math.PI);
+  S.elev = Math.atan2(v[2],h);               // 0 when held at ~45°, + tilt up, − tilt down
+  S.hasOri=true;
+}
+async function initOrientation(){
+  if(typeof DeviceOrientationEvent!=='undefined' && typeof DeviceOrientationEvent.requestPermission==='function'){
+    try{ await DeviceOrientationEvent.requestPermission(); }catch(e){}
+  }
+  window.addEventListener('deviceorientationabsolute', e=>onOri(e,true));
+  window.addEventListener('deviceorientation', e=>onOri(e,false));
+}
 
-// ---------- WebXR AR ----------
-let veil;
-async function checkAR(){try{if(navigator.xr&&await navigator.xr.isSessionSupported('immersive-ar'))$('ar').classList.remove('hide');}catch(e){}}
-async function startAR(){
- if(inAR){renderer.xr.getSession()?.end();return;}
- try{const s=await navigator.xr.requestSession('immersive-ar',{optionalFeatures:['dom-overlay','local-floor'],domOverlay:{root:$('ui')}});
-  renderer.xr.enabled=true;renderer.xr.setReferenceSpaceType('local');await renderer.xr.setSession(s);
-  inAR=true;clearP();world.visible=false;renderer.setClearColor(0x000000,0);$('ar').classList.add('on');
-  // dark veil over the camera feed keeps the view near-monochrome
-  veil=new THREE.Mesh(new THREE.PlaneGeometry(4,4),new THREE.MeshBasicMaterial({color:0,transparent:true,opacity:.72,depthWrite:false,depthTest:false}));
-  veil.position.z=-.5;veil.renderOrder=-1;camera.add(veil);scene.add(camera);
-  msg('AR: particles pin where the phone is.\nWalk & sweep slowly.');
-  s.addEventListener('end',()=>{inAR=false;renderer.xr.enabled=false;world.visible=true;renderer.setClearColor(0x000000,1);camera.remove(veil);scene.remove(camera);
-   $('ar').classList.remove('on');clearP();placeCam();renderer.setSize(innerWidth,innerHeight);msg('AR ended');});
- }catch(e){msg('AR failed: '+e.message);}}
+// ---------- audio ----------
+let ac, an, freq, binHz, binBase=null, bandBins=[], anL, anR, tdL, tdR;
+const cal = {active:false, until:0, acc:null, n:0, bandAcc:[0,0,0,0]};
+const floorDb=[NaN,NaN,NaN,NaN];
 
-// ---------- UI ----------
-document.querySelectorAll('[data-m]').forEach(b=>b.onclick=()=>{mode=b.dataset.m;document.querySelectorAll('[data-m]').forEach(x=>x.classList.toggle('on',x===b));});
-$('cal').onclick=calibrate;$('clr').onclick=()=>{clearP();samples.length=0;msg('cleared');};$('csv').onclick=exportCSV;$('ar').onclick=startAR;
-async function start(){
- $('start').classList.add('hide');$('bar').classList.remove('hide');
- if(!DEMO){
-  if(!isSecureContext)msg('Needs HTTPS for sensors.');
-  try{if(window.DeviceOrientationEvent?.requestPermission)await DeviceOrientationEvent.requestPermission();if(window.DeviceMotionEvent?.requestPermission)await DeviceMotionEvent.requestPermission();}catch(e){}
-  for(const n of ['accelerometer','gyroscope','magnetometer'])try{await navigator.permissions.query({name:n});}catch(e){}
-  startOrientation();await startMag();await startMic();checkAR();}
- running=true;}
-$('go').onclick=start;
-if(DEMO)start();
+async function initAudio(){
+  const stream = await navigator.mediaDevices.getUserMedia({audio:{
+    echoCancellation:false, noiseSuppression:false, autoGainControl:false,
+    channelCount:{ideal:2}, sampleRate:{ideal:48000}}});
+  ac = new (window.AudioContext||window.webkitAudioContext)({latencyHint:'interactive'});
+  if(ac.state==='suspended') await ac.resume();
+  const src = ac.createMediaStreamSource(stream);
+  an = ac.createAnalyser(); an.fftSize=8192; an.smoothingTimeConstant=0.55; an.minDecibels=-140; an.maxDecibels=0;
+  src.connect(an);                                        // never connected to destination: silent
+  const set = stream.getAudioTracks()[0].getSettings?.()||{};
+  const ch = set.channelCount || src.channelCount;
+  if(ch===2){
+    const sp=ac.createChannelSplitter(2); src.connect(sp);
+    anL=ac.createAnalyser(); anR=ac.createAnalyser(); anL.fftSize=anR.fftSize=1024;
+    sp.connect(anL,0); sp.connect(anR,1); tdL=new Float32Array(1024); tdR=new Float32Array(1024);
+    S.stereo={db:0,lag:0};
+  }
+  setupBins(ac.sampleRate);
+  $('rStL').textContent = ch===2?'L/R':'MIC';
+  $('rSt').textContent = ch===2?'STEREO':'MONO';
+}
+function setupBins(sr){
+  const n = 4096; binHz = sr/8192; freq = new Float32Array(n); binBase=new Float32Array(n).fill(NaN);
+  bandBins = BANDS.map(b=>[Math.max(1,Math.round(b.lo/binHz)), Math.min(n-1,Math.round(Math.min(b.hi,sr/2-200)/binHz))]);
+}
+function startCal(){ cal.active=true; cal.until=S.now+2; cal.acc=new Float64Array(freq.length); cal.n=0; cal.bandAcc=[0,0,0,0]; msg('CALIBRATING · stay quiet for 2 s'); }
 
-addEventListener('resize',()=>{if(inAR)return;camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);pmat.uniforms.uScale.value=innerHeight;});
-let lh=0;
-renderer.setAnimationLoop(()=>{const t=T();pmat.uniforms.uTime.value=t;
- if(!inAR){ptrG.attributes.position.setXYZ(1,S.dir.x*1.2,S.dir.y*1.2,S.dir.z*1.2);ptrG.attributes.position.needsUpdate=true;
-  if(!tp.size&&!running){orbit.th+=.002;placeCam();}}
- if(t-lh>.1){hud();lh=t;}
- renderer.render(scene,camera);window.__frames=(window.__frames||0)+1;});
+function analyse(){
+  if(DEMO){ demoAudio(); return; }
+  an.getFloatFrequencyData(freq);
+  const pw = new Float32Array(BANDS.length); let tot=0;
+  for(let b=0;b<BANDS.length;b++){ let s=0; const [i0,i1]=bandBins[b]; for(let i=i0;i<=i1;i++){ s+=Math.pow(10,freq[i]/10); } pw[b]=s; tot+=s; }
+  S.levelDbfs = 10*Math.log10(tot+1e-20);
+  for(let b=0;b<4;b++) S.bandDb[b]=10*Math.log10(pw[b]+1e-20);
+  if(cal.active){
+    for(let i=0;i<freq.length;i++) cal.acc[i]+=Math.pow(10,freq[i]/10);
+    for(let b=0;b<4;b++) cal.bandAcc[b]+=pw[b];
+    cal.n++;
+    if(S.now>=cal.until){ cal.active=false;
+      for(let i=0;i<freq.length;i++) binBase[i]=10*Math.log10(cal.acc[i]/cal.n+1e-20);
+      for(let b=0;b<4;b++) floorDb[b]=10*Math.log10(cal.bandAcc[b]/cal.n+1e-20)+1.0;
+      msg('Floor locked. Sweep slowly, top edge first.');
+    }
+  }
+  // adaptive floor: drops fast to quieter levels, creeps up very slowly
+  for(let b=0;b<4;b++){
+    if(isNaN(floorDb[b])) floorDb[b]=S.bandDb[b]+2;
+    else if(!cal.active){ const d=S.bandDb[b]-floorDb[b]; floorDb[b]+= d<0 ? d*0.08 : 0.004; }
+    S.bandAbove[b]=Math.max(0,S.bandDb[b]-floorDb[b]);
+  }
+  // dominant frequency (above baseline), parabolic interpolation
+  let best=-1e9, bi=0; const i0=Math.round(30/binHz);
+  for(let i=i0;i<freq.length-1;i++){ const v=freq[i]-(isNaN(binBase[i])?-110:binBase[i]); if(v>best){best=v;bi=i;} }
+  if(best>6){ const a=freq[bi-1],b=freq[bi],c=freq[bi+1]; const p=0.5*(a-c)/(a-2*b+c||1); S.domHz=(bi+(isFinite(p)?p:0))*binHz; } else S.domHz=0;
+  if(S.stereo){
+    anL.getFloatTimeDomainData(tdL); anR.getFloatTimeDomainData(tdR);
+    let l=0,r=0; for(let i=0;i<1024;i++){l+=tdL[i]*tdL[i]; r+=tdR[i]*tdR[i];}
+    S.stereo.db = S.stereo.db*0.85 + 0.15*10*Math.log10((l+1e-12)/(r+1e-12));
+    let bl=0,bv=-1e9; for(let lag=-24;lag<=24;lag+=2){ let s=0; for(let i=32;i<992;i+=2) s+=tdL[i]*tdR[i+lag]; if(s>bv){bv=s;bl=lag;} }
+    S.stereo.lag=bl;
+  }
+}
+
+// ---------- demo: virtual sound sources around you ----------
+const SRC = [
+  {hdg:40,  el:5,  band:[0.2,1.0,0.7,0.2], lvl:24, hz:620,  name:'voice'},
+  {hdg:205, el:-15,band:[1.0,0.35,0.05,0], lvl:20, hz:100,  name:'fridge hum'},
+  {hdg:300, el:20, band:[0,0.15,0.6,1.0],  lvl:18, hz:11200,name:'whine', burst:true},
+  {hdg:120, el:0,  band:[0.3,0.6,0.5,0.2], lvl:10, hz:1400, name:'traffic'},
+];
+function demoAudio(){
+  const t=S.now, H=S.heading*R2D; let best=0,hz=0;
+  for(let b=0;b<4;b++) S.bandAbove[b]=Math.max(0,(Math.random()-0.6)*4);
+  for(const s of SRC){
+    let d=Math.abs(((H-s.hdg+540)%360)-180)*D2R;
+    const lobe=Math.pow(Math.max(0,Math.cos(d*0.5)),22);   // body shadow + mic directivity
+    let lvl=s.lvl*lobe*(s.burst?(Math.sin(t*3.1)>0.2?1:0.15):1)*(0.85+0.3*Math.random());
+    for(let b=0;b<4;b++) S.bandAbove[b]+=lvl*s.band[b];
+    if(lvl>best){best=lvl;hz=s.hz*(0.98+0.04*Math.random());}
+  }
+  S.domHz = best>4?hz:0;
+  S.totalAbove = Math.max(...S.bandAbove);
+  for(let b=0;b<4;b++){ floorDb[b]=-78-b*4; S.bandDb[b]=floorDb[b]+S.bandAbove[b]; }
+  S.levelDbfs = -62+S.totalAbove;
+}
+function demoMotion(){
+  if(S.dragHdg) return;
+  const t=S.now;
+  S.heading=((t*38 + 25*Math.sin(t*0.7))%360+360)%360*D2R;
+  S.elev=(14*Math.sin(t*0.9))*D2R; S.hasOri=true; S.absolute=true;
+}
+
+// ---------- spawn from analysis ----------
+const sensKey = ()=>SENS[sensIdx];
+function emit(dt){
+  const {t,k}=sensKey(); let total=0;
+  for(let b=0;b<4;b++){
+    const a=S.bandAbove[b]; total=Math.max(total,a);
+    if(a>S.peakHold[b]) S.peakHold[b]=a; else S.peakHold[b]=Math.max(0,S.peakHold[b]-dt*3);
+    if(!bandOn[b]||a<t) continue;
+    const want=(a-t)/k*dt*60; let n=Math.floor(want)+(Math.random()<want%1?1:0); n=Math.min(n,10);
+    const inten=Math.min(1,(a-t)/24);
+    for(let i=0;i<n;i++) spawn(S.heading,S.elev,b,inten);
+  }
+  S.totalAbove=total;
+  // directional envelope (peak-hold per 5°) with slow decay
+  const ei=Math.floor(((S.heading*R2D)%360)/5)%ENV_N;
+  for(let i=0;i<ENV_N;i++) env[i]=Math.max(0,env[i]-dt*0.35);
+  const val=bandOn.reduce((m,on,b)=>on?Math.max(m,S.bandAbove[b]):m,0);
+  if(val>env[ei]) env[ei]=val;
+}
+
+// ---------- CSV log ----------
+const log=[]; let lastLog=0;
+function logRow(){
+  if(S.now-lastLog<0.1||log.length>200000) return; lastLog=S.now;
+  log.push([Math.round(S.now*1000), new Date().toISOString(), (S.heading*R2D).toFixed(1), (S.elev*R2D).toFixed(1),
+    S.totalAbove.toFixed(1), Math.round(S.domHz), ...S.bandAbove.map(v=>v.toFixed(1)), S.levelDbfs.toFixed(1)].join(','));
+}
+function exportCsv(){
+  const head='t_ms,time_iso,heading_deg,elev_deg,db_above_floor,dominant_hz,low_db,mid_db,high_db,ultra_db,level_dbfs\n';
+  const blob=new Blob([head+log.join('\n')],{type:'text/csv'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+  a.download='field-vision-sound-'+new Date().toISOString().replace(/[:.]/g,'-')+'.csv'; a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),4000); msg(log.length+' rows exported');
+}
+
+// ---------- HUD (2D overlay) ----------
+const hud=$('hud'), hx=hud.getContext('2d'), spec=$('spec'), sx=spec.getContext('2d');
+let W=0,H=0,cx=0,cy=0,RP=0;
+function resize(){
+  W=innerWidth; H=innerHeight; renderer.setSize(W,H,false);
+  hud.width=W*DPR; hud.height=H*DPR; hx.setTransform(DPR,0,0,DPR,0,0);
+  spec.width=spec.clientWidth*DPR; spec.height=spec.clientHeight*DPR;
+  cx=W/2; cy=H*0.47; RP=Math.min(W*0.46, H*0.33);
+  // ortho camera matching the HUD radar: 1 unit = RP px, centred at (cx,cy)
+  camR.left=-cx/RP; camR.right=(W-cx)/RP; camR.top=cy/RP; camR.bottom=-(H-cy)/RP; camR.updateProjectionMatrix();
+  cam3.aspect=W/H; cam3.updateProjectionMatrix();
+}
+addEventListener('resize',resize); screen.orientation?.addEventListener?.('change',resize);
+
+function drawRadarHud(){
+  const g=hx, Hd=S.heading;
+  // rings
+  g.lineWidth=1;
+  for(let i=0;i<BANDS.length;i++){ const r=BANDS[i].r2[1]*RP; g.strokeStyle=i===3?'#3c3c3c':'#232323'; g.beginPath(); g.arc(cx,cy,r,0,7); g.stroke(); }
+  g.strokeStyle='#4a4a4a'; g.beginPath(); g.arc(cx,cy,RP*1.03,0,7); g.stroke();
+  g.fillStyle='#4d4d4d'; g.font='9px ui-monospace,monospace'; g.textAlign='left';
+  BANDS.forEach((b,i)=>g.fillText(b.name,cx+4,cy-(b.r2[0]+0.03)*RP+ (i?0:0)));
+  // spokes + compass ticks (rotate with heading)
+  for(let d=0;d<360;d+=5){
+    const a=(d*D2R-Hd); const s=Math.sin(a), c=-Math.cos(a);
+    const big=d%30===0, r0=RP*(big?1.03:1.03), r1=RP*(big?1.09:1.06);
+    g.strokeStyle=big?'#8a8a8a':'#3a3a3a'; g.beginPath(); g.moveTo(cx+s*r0,cy+c*r0); g.lineTo(cx+s*r1,cy+c*r1); g.stroke();
+    if(big){ g.strokeStyle='#141414'; g.beginPath(); g.moveTo(cx+s*RP*0.2,cy+c*RP*0.2); g.lineTo(cx+s*RP,cy+c*RP); g.stroke(); }
+  }
+  g.textAlign='center'; g.textBaseline='middle';
+  for(const [lab,d] of [['N',0],['E',90],['S',180],['W',270],['30',30],['60',60],['120',120],['150',150],['210',210],['240',240],['300',300],['330',330]]){
+    const a=d*D2R-Hd, r=RP*1.16; const card=lab.length===1; const rel=Math.abs(((a/D2R)%360+540)%360-180); if(rel<12) continue;
+    g.fillStyle=lab==='N'?'#fff':card?'#bbb':'#555'; g.font=(card?'bold 13px ':'9px ')+'ui-monospace,monospace';
+    g.fillText(lab,cx+Math.sin(a)*r,cy-Math.cos(a)*r);
+  }
+  // forward listening cone (fixed, screen-up = where the phone points)
+  const cone=16*D2R; const grd=g.createRadialGradient(cx,cy,0,cx,cy,RP);
+  grd.addColorStop(0,'rgba(255,255,255,0.10)'); grd.addColorStop(1,'rgba(255,255,255,0.01)');
+  g.fillStyle=grd; g.beginPath(); g.moveTo(cx,cy); g.arc(cx,cy,RP,-Math.PI/2-cone,-Math.PI/2+cone); g.closePath(); g.fill();
+  g.strokeStyle='rgba(255,255,255,0.55)'; g.beginPath(); g.moveTo(cx,cy-10); g.lineTo(cx,cy-RP); g.stroke();
+  // fixed pointer caret at top
+  g.fillStyle='#fff'; g.beginPath(); g.moveTo(cx,cy-RP*1.03+1); g.lineTo(cx-7,cy-RP*1.03-11); g.lineTo(cx+7,cy-RP*1.03-11); g.closePath(); g.fill();
+  // rotating sweep (screen space) with trailing gradient
+  const sa=S.sweep-Hd; // world sweep angle -> screen
+  for(let i=0;i<24;i++){ const a=sa-i*0.025; g.strokeStyle=`rgba(255,255,255,${0.22*(1-i/24)})`;
+    g.beginPath(); g.moveTo(cx,cy); g.lineTo(cx+Math.sin(a)*RP,cy-Math.cos(a)*RP); g.stroke(); }
+  // directional envelope (peak hold per 5°) outside the rim
+  g.strokeStyle='rgba(255,255,255,0.75)'; g.lineWidth=2;
+  let pk=0,pi=-1; for(let i=0;i<ENV_N;i++) if(env[i]>pk){pk=env[i];pi=i;}
+  for(let i=0;i<ENV_N;i++){ if(env[i]<0.5) continue; const a=(i*5+2.5)*D2R-Hd, l=Math.min(1,env[i]/30)*RP*0.12;
+    g.globalAlpha=0.3+0.7*Math.min(1,env[i]/30);
+    g.beginPath(); g.moveTo(cx+Math.sin(a)*RP*1.035,cy-Math.cos(a)*RP*1.035); g.lineTo(cx+Math.sin(a)*(RP*1.035-l),cy-Math.cos(a)*(RP*1.035-l)); g.stroke(); }
+  g.globalAlpha=1; g.lineWidth=1;
+  if(pi>=0&&pk>3){ const a=(pi*5+2.5)*D2R-Hd, r=RP*0.985; const px=cx+Math.sin(a)*r, py=cy-Math.cos(a)*r;
+    g.strokeStyle='#fff'; g.beginPath(); g.arc(px,py,6,0,7); g.stroke(); g.beginPath(); g.arc(px,py,10,0,7); g.globalAlpha=0.35; g.stroke(); g.globalAlpha=1;
+    S.peakTxt=`${String(Math.round(pi*5+2.5)).padStart(3,'0')}° +${pk.toFixed(0)}`; } else S.peakTxt='---';
+  // Peter
+  g.fillStyle='#fff'; g.beginPath(); g.arc(cx,cy,4.5,0,7); g.fill();
+  g.strokeStyle='rgba(255,255,255,0.35)'; g.beginPath(); g.arc(cx,cy,9+4*Math.sin(S.now*4),0,7); g.stroke();
+  g.fillStyle='#777'; g.font='9px ui-monospace,monospace'; g.fillText('YOU',cx,cy+18);
+  g.fillText('FRONT',cx,cy-RP*1.03-20);
+}
+function draw3DHud(){
+  const g=hx; g.fillStyle='#555'; g.font='10px ui-monospace,monospace'; g.textAlign='center';
+  g.fillText('DRAG ORBIT · PINCH ZOOM · DOUBLE-TAP RESET',W/2,H*0.13);
+  // compass strip
+  const y=H*0.16; g.strokeStyle='#333'; g.beginPath(); g.moveTo(20,y); g.lineTo(W-20,y); g.stroke();
+  const camYaw=S.heading+orbit.yaw;
+  for(let d=0;d<360;d+=15){ let a=((d*D2R-camYaw+Math.PI*3)%(Math.PI*2))-Math.PI; if(Math.abs(a)>1.2) continue;
+    const x=W/2+a/1.2*(W/2-20); g.strokeStyle=d%90?'#444':'#ccc'; g.beginPath(); g.moveTo(x,y-(d%90?3:6)); g.lineTo(x,y+(d%90?3:6)); g.stroke();
+    if(d%90===0){ g.fillStyle='#ddd'; g.fillText('NESW'[d/90],x,y+16); } }
+  g.fillStyle='#fff'; g.beginPath(); g.moveTo(W/2,y-8); g.lineTo(W/2-5,y-15); g.lineTo(W/2+5,y-15); g.fill();
+  S.peakTxt = (()=>{ let pk=0,pi=-1; for(let i=0;i<ENV_N;i++) if(env[i]>pk){pk=env[i];pi=i;} return pk>3?`${String(Math.round(pi*5+2.5)).padStart(3,'0')}° +${pk.toFixed(0)}`:'---'; })();
+}
+const specPeak=new Float32Array(160);
+function drawSpectrum(){
+  const g=sx, w=spec.width, h=spec.height; g.clearRect(0,0,w,h);
+  const N=160; const fmin=30, fmax=(ac?ac.sampleRate/2:22000);
+  const bw=w/N;
+  for(let i=0;i<N;i++){
+    const f0=fmin*Math.pow(fmax/fmin,i/N), f1=fmin*Math.pow(fmax/fmin,(i+1)/N);
+    let v=0;
+    if(DEMO){ const bi=f0<250?0:f0<2000?1:f0<8000?2:3; v=Math.max(0,S.bandAbove[bi]*(0.6+0.5*Math.sin(i*0.7+S.now*5))); if(S.domHz&&Math.abs(Math.log(S.domHz/f0))<0.06) v+=12; }
+    else if(freq){ const i0=Math.max(1,Math.floor(f0/binHz)), i1=Math.max(i0,Math.floor(f1/binHz)); let m=-200;
+      for(let k=i0;k<=i1&&k<freq.length;k++){ const base=isNaN(binBase[k])?-100:binBase[k]; m=Math.max(m,freq[k]-base);} v=Math.max(0,m); }
+    const bi=f0<250?0:f0<2000?1:f0<8000?2:3;
+    const hh=Math.min(1,v/36)*(h-4);
+    const s=Math.round(255*BANDS[bi].shade*(bandOn[bi]?1:0.25));
+    g.fillStyle=`rgb(${s},${s},${s})`; g.fillRect(i*bw,h-hh,Math.max(1,bw-1*DPR),hh);
+    specPeak[i]=Math.max(v,specPeak[i]-0.25);
+    const ph=Math.min(1,specPeak[i]/36)*(h-4); g.fillStyle='#fff'; g.fillRect(i*bw,h-ph-2*DPR,Math.max(1,bw-1*DPR),1*DPR);
+  }
+  g.fillStyle='#444'; for(const f of [250,2000,8000]){ const x=Math.log(f/fmin)/Math.log(fmax/fmin)*w; g.fillRect(x,0,1*DPR,h); }
+}
+
+// ---------- 3D camera (follows pointing direction) ----------
+function update3DCam(){
+  const yaw=S.heading+orbit.yaw, p=orbit.pitch, d=orbit.dist;
+  const fx=Math.sin(yaw), fz=-Math.cos(yaw);       // forward on the ground plane
+  cam3.position.set(-fx*d*Math.cos(p), 0.15+d*Math.sin(p), -fz*d*Math.cos(p));
+  cam3.lookAt(fx*0.9, -0.7, fz*0.9);
+  const ce=Math.cos(S.elev); beamGeo.attributes.position.setXYZ(1, ce*Math.sin(S.heading)*3, Math.sin(S.elev)*3, -ce*Math.cos(S.heading)*3);
+  beamGeo.attributes.position.needsUpdate=true;
+}
+
+// ---------- input ----------
+const ptrs=new Map(); let pinch0=0, dist0=0, lastTap=0;
+const gl=$('gl');
+gl.addEventListener('pointerdown',e=>{ ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY}); gl.setPointerCapture(e.pointerId);
+  if(ptrs.size===2){ const [a,b]=[...ptrs.values()]; pinch0=Math.hypot(a.x-b.x,a.y-b.y); dist0=orbit.dist; }
+  const n=performance.now(); if(n-lastTap<300){ Object.assign(orbit,ORB0); } lastTap=n; });
+gl.addEventListener('pointermove',e=>{ const p=ptrs.get(e.pointerId); if(!p) return; const dx=e.clientX-p.x, dy=e.clientY-p.y; p.x=e.clientX; p.y=e.clientY;
+  if(ptrs.size===2){ const [a,b]=[...ptrs.values()]; const d=Math.hypot(a.x-b.x,a.y-b.y); if(pinch0>0) orbit.dist=Math.min(9,Math.max(0.6,dist0*pinch0/d)); return; }
+  if(S.view==='3d'){ orbit.yaw-=dx*0.008; orbit.pitch=Math.min(1.45,Math.max(-1.2,orbit.pitch+dy*0.006)); }
+  else if(!S.hasOri || (DEMO&&S.dragHdg)){ S.manualHdg=(S.manualHdg-dx*0.006+Math.PI*2)%(Math.PI*2); S.heading=S.manualHdg; } });
+const up=e=>{ ptrs.delete(e.pointerId); if(ptrs.size<2) pinch0=0; };
+gl.addEventListener('pointerup',up); gl.addEventListener('pointercancel',up);
+gl.addEventListener('wheel',e=>{ orbit.dist=Math.min(9,Math.max(0.6,orbit.dist*(1+e.deltaY*0.001))); },{passive:true});
+
+function msg(t){ $('msg').textContent=t; }
+document.querySelectorAll('#bands button').forEach(b=>b.onclick=()=>{ const i=+b.dataset.b; bandOn[i]=!bandOn[i]; b.className=bandOn[i]?'on':'dim'; });
+$('view').onclick=()=>{ S.view=S.view==='radar'?'3d':'radar'; $('view').textContent=S.view==='radar'?'3D':'RADAR'; $('mode').textContent=S.view==='radar'?'RADAR · HEADING-UP':'3D · FOLLOW POINTER'; };
+$('cal').onclick=()=>{ if(DEMO){msg('Demo: floor simulated'); return;} if(an) startCal(); };
+$('sens').onclick=()=>{ sensIdx=(sensIdx+1)%SENS.length; $('sens').textContent='SENS '+(sensIdx+1); msg(['Low sensitivity: only strong sounds','Balanced','High sensitivity: faint sounds too'][sensIdx]); };
+$('clear').onclick=()=>{ clearParticles(); log.length=0; msg('Cleared'); };
+$('csv').onclick=exportCsv;
+
+$('start').onclick=async()=>{
+  $('start').textContent='…';
+  try{
+    if(!DEMO){ await initOrientation(); await initAudio(); }
+    $('overlay').classList.add('hide'); S.running=true;
+    if(!DEMO){ startCal(); setTimeout(()=>{ if(!S.hasOri) msg('No compass found: drag the radar to turn. Sound still maps.'); },2500); }
+  }catch(err){ $('start').textContent='START'; msg('Mic blocked: '+(err.message||err)+'. Allow microphone and retry.'); }
+};
+
+// ---------- loop ----------
+let last=performance.now(), frames=0, fpsT=0, fps=0;
+function frame(now){
+  requestAnimationFrame(frame);
+  const dt=Math.min(0.1,(now-last)/1000); last=now; S.now=(now-S.t0)/1000;
+  frames++; if(now-fpsT>1000){ fps=frames; frames=0; fpsT=now; }
+  if(S.running){
+    if(DEMO) demoMotion();
+    analyse(); emit(dt); logRow();
+  }
+  S.sweep=(S.sweep+dt*2.1)%(Math.PI*2);
+  flushParticles();
+  common.uTime.value=S.now; common.uHead.value=S.heading; common.uSweep.value=S.sweep;
+  hx.clearRect(0,0,W,H);
+  if(S.view==='radar'){ renderer.render(sceneR,camR); drawRadarHud(); }
+  else { update3DCam(); renderer.render(scene3,cam3); draw3DHud(); }
+  drawSpectrum();
+  // readouts
+  $('rDb').textContent=(S.running?'+'+S.totalAbove.toFixed(1):'--')+' dB';
+  $('rHz').textContent=S.domHz?(S.domHz>=1000?(S.domHz/1000).toFixed(2)+' kHz':Math.round(S.domHz)+' Hz'):'-- Hz';
+  $('rHdg').textContent=String(Math.round(S.heading*R2D)%360).padStart(3,'0')+'°'+(S.absolute?'':' R');
+  $('rEl').textContent=(S.elev>=0?'+':'')+Math.round(S.elev*R2D)+'°';
+  $('rPk').textContent=S.peakTxt||'---';
+  if(S.stereo) $('rSt').textContent=(S.stereo.db>=0?'+':'')+S.stereo.db.toFixed(1)+'dB '+S.stereo.lag;
+  else if(DEMO) $('rSt').textContent='DEMO';
+  if(S.debug) S.debug.fps=fps;
+}
+window.__fv={S,get fps(){return fps}, get alive(){ let n=0; for(let i=0;i<CAP;i++) if(S.now-aMeta[i*2]<FADE) n++; return n; }};
+resize();
+if(DEMO){
+  // pre-fill ~25 s of sweeping so the map is populated immediately
+  S.running=true; $('overlay').classList.add('hide'); msg('DEMO · synthetic sources at 040° voice, 205° hum, 300° whine, 120° traffic');
+  const save=S.t0; for(let k=0;k<25*30;k++){ S.now=k/30; demoMotion(); analyse(); emit(1/30); }
+  S.t0=performance.now()-25000; flushParticles(); head=head; dirtyFrom=0; dirtyCount=CAP; flushParticles();
+}
+requestAnimationFrame(frame);
 </script>
-</body></html>
+</body>
+</html>
