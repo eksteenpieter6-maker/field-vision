@@ -27,6 +27,12 @@ button.dim{color:#666;border-color:#2a2a2a}
 #msg{font-size:11px;color:var(--g);text-align:center;min-height:14px;margin-top:2px;line-height:1.35}
 #spec{display:block;width:100%;height:58px}
 .hide{display:none!important}
+body.night{--w:#7a7a7a;--g:#4a4a4a}
+body.night button{color:#7a7a7a;border-color:#2c2c2c}
+body.night button.on{background:#3a3a3a;color:#000;border-color:#3a3a3a}
+body.night button.dim{color:#3a3a3a;border-color:#1a1a1a}
+body.night button:active{background:#141414}
+body.night #start{border-color:#5a5a5a}
 #overlay{position:fixed;inset:0;display:flex;flex-direction:column;justify-content:center;align-items:center;padding:30px;text-align:center;background:rgba(0,0,0,.86);z-index:5}
 #overlay h1{font-size:20px;letter-spacing:.35em;margin:0 0 6px;font-weight:600}
 #overlay p{color:var(--g);font-size:12px;line-height:1.6;max-width:340px;margin:6px 0}
@@ -53,7 +59,7 @@ button.dim{color:#666;border-color:#2a2a2a}
   <canvas id="spec"></canvas>
   <div id="msg"></div>
   <div class="row">
-    <button id="sonar">SONAR OFF</button><button id="layP" class="on">PASSIVE</button><button id="layS" class="on">ECHO</button>
+    <button id="sonar">SONAR</button><button id="layP" class="on">PASSIVE</button><button id="layS" class="on">ECHO</button><button id="night">NIGHT</button>
   </div>
   <div class="row" id="bands">
     <button class="on" data-b="0">LOW</button><button class="on" data-b="1">MID</button><button class="on" data-b="2">HIGH</button><button class="on" data-b="3">ULTRA</button>
@@ -182,10 +188,11 @@ geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 1e5);
 let head = 0, dirtyFrom = -1, dirtyCount = 0;
 
 const common = {
-  uTime:{value:0}, uFade:{value:FADE}, uSize:{value:1.6*DPR}, uHead:{value:0}, uSweep:{value:0}, uScale:{value:1}, uShowP:{value:1}, uShowS:{value:1},
+  uTime:{value:0}, uFade:{value:FADE}, uSize:{value:1.6*DPR}, uHead:{value:0}, uSweep:{value:0}, uScale:{value:1}, uShowP:{value:1}, uShowS:{value:1}, uGain:{value:1}, uBoost:{value:1.6},
 };
 const FRAG = `
 precision highp float;
+uniform float uGain;
 varying float vA; varying float vL;
 void main(){
   vec2 p = gl_PointCoord*2.0-1.0; float r = dot(p,p);
@@ -193,11 +200,11 @@ void main(){
   float a;
   if(vL>0.5){ a = (smoothstep(0.62,0.3,r) + (1.0-r)*0.08)*vA*1.35; }        // sonar echo: crisp, bright
   else { a = (smoothstep(0.55,0.2,r)*0.6 + (1.0-r)*0.2)*vA*0.75; }          // passive sound: dimmer haze
-  gl_FragColor = vec4(vec3(min(a,1.0)),1.0);
+  gl_FragColor = vec4(vec3(min(a,1.0)*uGain),1.0);
 }`;
 const VCOMMON = `
 attribute vec4 aData; attribute vec3 aMeta;
-uniform float uTime,uFade,uSize,uHead,uSweep,uScale,uShowP,uShowS;
+uniform float uTime,uFade,uSize,uHead,uSweep,uScale,uShowP,uShowS,uBoost;
 varying float vA; varying float vL;
 float lifeA(){ vL=aMeta.z; if((aMeta.z>0.5?uShowS:uShowP)<0.5) return 0.0; float age=uTime-aMeta.x; if(age<0.0||age>uFade) return 0.0; float f=1.0-age/uFade; return f*f*aMeta.y; }
 `;
@@ -209,7 +216,7 @@ const matRadar = new THREE.ShaderMaterial({
     float d=aData.x-uHead;                       // heading-up: forward = screen up
     vec2 p=vec2(sin(d),cos(d))*aData.z;
     float sw=mod(uSweep-aData.x,6.28318);        // brighten just behind the rotating sweep
-    float boost=1.0+1.6*exp(-sw*3.0);
+    float boost=1.0+uBoost*exp(-sw*3.0);
     vA=min(a*boost,1.0);
     gl_Position=projectionMatrix*modelViewMatrix*vec4(p,0.0,1.0);
     gl_PointSize=uSize*(0.85+0.4*a)*(aMeta.z>0.5?1.2:1.0);
@@ -489,7 +496,7 @@ $('sonar').onclick=async()=>{
   }
   son.on=!son.on; son.nextT=0; son.pend.length=0; son.hist.length=0;
   if(bandBins.length){ if(S.ultraHi==null) S.ultraHi=bandBins[3][1]; bandBins[3][1]=son.on?Math.round(16500/binHz):S.ultraHi; } // keep chirps out of the passive layer
-  $('sonar').textContent=son.on?'SONAR ON':'SONAR OFF'; $('sonar').className=son.on?'on':'';
+  $('sonar').textContent='SONAR'; $('sonar').className=son.on?'on':'';
   if(!son.on) msg('Sonar off. Passive listening only, no sound output.');
 };
 $('layP').onclick=()=>{ common.uShowP.value=common.uShowP.value?0:1; $('layP').className=common.uShowP.value?'on':'dim'; };
@@ -571,7 +578,7 @@ function drawRadarHud(){
     g.setLineDash([]); }
   // Peter
   g.fillStyle='#fff'; g.beginPath(); g.arc(cx,cy,4.5,0,7); g.fill();
-  g.strokeStyle='rgba(255,255,255,0.35)'; g.beginPath(); g.arc(cx,cy,9+4*Math.sin(S.now*4),0,7); g.stroke();
+  g.strokeStyle='rgba(255,255,255,0.35)'; g.beginPath(); g.arc(cx,cy,night?11:9+4*Math.sin(S.now*4),0,7); g.stroke();
   g.fillStyle='#777'; g.font='9px ui-monospace,monospace'; g.fillText('YOU',cx,cy+18);
   g.fillText('FRONT',cx,cy-RP*1.03-20);
 }
@@ -632,6 +639,17 @@ const up=e=>{ ptrs.delete(e.pointerId); if(ptrs.size<2) pinch0=0; };
 gl.addEventListener('pointerup',up); gl.addEventListener('pointercancel',up);
 gl.addEventListener('wheel',e=>{ orbit.dist=Math.min(9,Math.max(0.6,orbit.dist*(1+e.deltaY*0.001))); },{passive:true});
 
+// ---------- night mode + screen wake lock ----------
+let night=false; const meMat=scaffold.children.find(o=>o.isMesh)?.material;
+function setNight(on){ night=on; document.body.classList.toggle('night',on); $('night').className=on?'on':'';
+  common.uGain.value=on?0.45:1; common.uBoost.value=on?0.35:1.6;
+  if(meMat) meMat.color.setHex(on?0x5a5a5a:0xffffff); beam.material.color.setHex(on?0x3a3a3a:0x9a9a9a);
+  try{ localStorage.setItem('fv-night',on?'1':'0'); }catch(e){} }
+$('night').onclick=()=>setNight(!night);
+try{ if(localStorage.getItem('fv-night')==='1') setNight(true); }catch(e){}
+let wakeLock=null;
+async function wake(){ try{ if('wakeLock' in navigator && document.visibilityState==='visible' && !wakeLock){ wakeLock=await navigator.wakeLock.request('screen'); wakeLock.addEventListener('release',()=>{ wakeLock=null; }); } }catch(e){} }
+document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible' && S.running) wake(); });
 function msg(t){ $('msg').textContent=t; }
 document.querySelectorAll('#bands button').forEach(b=>b.onclick=()=>{ const i=+b.dataset.b; bandOn[i]=!bandOn[i]; b.className=bandOn[i]?'on':'dim'; });
 $('view').onclick=()=>{ S.view=S.view==='radar'?'3d':'radar'; $('view').textContent=S.view==='radar'?'3D':'RADAR'; $('mode').textContent=S.view==='radar'?'RADAR · HEADING-UP':'3D · FOLLOW POINTER'; };
@@ -641,7 +659,7 @@ $('clear').onclick=()=>{ clearParticles(); log.length=0; msg('Cleared'); };
 $('csv').onclick=exportCsv;
 
 $('start').onclick=async()=>{
-  $('start').textContent='…';
+  $('start').textContent='…'; wake();
   try{
     if(!DEMO){ await initOrientation(); await initAudio(); }
     $('overlay').classList.add('hide'); S.running=true;
@@ -668,6 +686,7 @@ function frame(now){
   if(S.view==='radar'){ renderer.render(sceneR,camR); drawRadarHud(); }
   else { update3DCam(); renderer.render(scene3,cam3); draw3DHud(); }
   drawSpectrum();
+  if(night){ for(const [c,w,h] of [[hx,W,H],[sx,spec.width,spec.height]]){ c.save(); c.setTransform(1,0,0,1,0,0); c.globalCompositeOperation='destination-out'; c.fillStyle='rgba(0,0,0,0.5)'; c.fillRect(0,0,c.canvas.width,c.canvas.height); c.restore(); } }
   // readouts
   $('rDb').textContent=(S.running?'+'+S.totalAbove.toFixed(1):'--')+' dB';
   $('rHz').textContent=S.domHz?(S.domHz>=1000?(S.domHz/1000).toFixed(2)+' kHz':Math.round(S.domHz)+' Hz'):'-- Hz';
@@ -683,7 +702,7 @@ resize();
 if(DEMO){
   // pre-fill ~25 s of sweeping so the map is populated immediately
   S.running=true; $('overlay').classList.add('hide'); msg('DEMO · synthetic sources at 040° voice, 205° hum, 300° whine, 120° traffic');
-  const save=S.t0; son.on=true; $('sonar').textContent='SONAR ON'; $('sonar').className='on';
+  const save=S.t0; son.on=true; $('sonar').className='on';
   for(let k=0;k<25*30;k++){ S.now=k/30; demoMotion(); analyse(); emit(1/30); demoSonar(); }
   son.demoNext=0;
   S.t0=performance.now()-25000; flushParticles(); head=head; dirtyFrom=0; dirtyCount=CAP; flushParticles();
