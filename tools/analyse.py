@@ -24,7 +24,10 @@ plt.rcParams.update({"figure.facecolor": "black", "axes.facecolor": "black", "sa
 def load(path):
     with open(path) as f:
         d = json.load(f)
-    return d["header"], d.get("frames", []), d.get("pings", []), d.get("particles", [])
+    h = d.get("header") or {}
+    if d.get("kind") == "diag":   # DIAG > DOWNLOAD JSON (v2.5+): no REC frames, last ~150 pings, DIAG text
+        h = dict(h, diagText=d.get("diag", ""), durationS=h.get("durationS") or 0)
+    return h, d.get("frames", []), d.get("pings", []), d.get("particles", [])
 
 
 def summary(h, frames, pings, parts):
@@ -60,7 +63,7 @@ def summary(h, frames, pings, parts):
         best = [p["best"] for p in ok if p.get("best") is not None]
         if best:
             L.append(f"Best echo per ping (x floor): median {np.median(best):.1f}, max {max(best):.1f}; threshold median {np.median([p['thr'] for p in ok if p.get('thr')] or [0]):.1f}")
-        pk = [(p["hdg"], r, snr) for p in ok for r, snr in p["peaks"]]
+        pk = [(p["hdg"], r, snr) for p in ok for r, snr, *_ in p["peaks"]]
         plotted = sum(1 for p in ok if p.get("plotted"))
         L.append(f"Echo peaks found: {len(pk)} in {sum(1 for p in ok if p['peaks'])} pings; pings with plotted echoes: {plotted}")
         if pk:
@@ -72,6 +75,20 @@ def summary(h, frames, pings, parts):
                 k = int(hh // 30) * 30
                 near[k] = min(near.get(k, 9), r)
             L.append("Nearest echo per 30 deg sector: " + ", ".join(f"{k:03d}deg {near[k]:.2f} m (n={sectors[k]})" for k in sorted(near)))
+    cnts = [p["cnt"] for p in pings if p.get("cnt")]
+    if cnts:   # v2.5+: where candidate echoes die
+        tot = Counter()
+        for c in cnts:
+            tot.update(c)
+        rep = sum(1 for p in pings for pk in p.get("peaks", []) if len(pk) > 2 and not pk[2])
+        L.append("Peak fates (v2.5): " + ", ".join(f"{k} {tot[k]}" for k in ["found", "ripple", "thr", "shape", "gate", "code", "ok"]) + f", failed repeat {rep}")
+        cand = [c for p in pings for c in p.get("cands", [])]
+        if cand:
+            L.append("Candidate fate by range (0.5 m bins): " + "; ".join(
+                f"{b/2:.1f}-{b/2+0.5:.1f} m: " + ",".join(f"{w} {n}" for w, n in Counter(c[2] for c in cand if int(c[0] * 2) == b).most_common())
+                for b in sorted(set(int(c[0] * 2) for c in cand))))
+    if h.get("diagText"):
+        L.append("--- DIAG at export ---\n" + h["diagText"])
     if parts:
         t = Counter(p[4] for p in parts)
         L.append(f"Particle snapshot: {len(parts)} points ({t.get(0,0)} passive, {t.get(1,0)} sonar)")
@@ -94,7 +111,7 @@ def plot_map(h, pings, parts, out):
         if not p["ok"]:
             continue
         th = math.radians(p["hdg"])
-        for r, snr in p["peaks"]:
+        for r, snr, *_ in p["peaks"]:
             xs.append(r * math.sin(th)); ys.append(r * math.cos(th)); cs.append(min(1, math.log10(max(snr, 1)) / 3))
     if xs:
         ax.scatter(xs, ys, s=6, c=np.array(cs), cmap="gray", vmin=0, vmax=1, lw=0, label="sonar echo peaks")
@@ -126,7 +143,7 @@ def plot_profile(pings, out):
         im = ax.imshow(D.T, aspect="auto", origin="lower", cmap="gray", vmin=0, vmax=max(20, np.percentile(D, 99.5)),
                        extent=[0, len(prof), 0, M.shape[1] * 0.01])
         for i, p in enumerate(prof):
-            for r, _ in p["peaks"]:
+            for r, *_ in p["peaks"]:
                 ax.plot(i + 0.5, r, marker="_", color="white", ms=5, mew=1)
         cb = fig.colorbar(im, ax=ax, pad=0.01); cb.set_label("dB above noise floor"); cb.ax.yaxis.set_tick_params(color="#aaa")
         ax.set_xlabel(f"ping # ({t[0]:.1f}-{t[-1]:.1f} s)"); ax.set_ylabel("range (m)")

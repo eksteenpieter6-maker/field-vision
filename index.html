@@ -20,7 +20,9 @@ html,body{margin:0;height:100%;background:#000;color:var(--w);font-family:ui-mon
 .title b{display:block;color:var(--w);font-size:15px;letter-spacing:.24em;margin-top:2px}
 .read{display:grid;grid-template-columns:auto auto;gap:1px 10px;text-align:right;font-size:11px;color:var(--g)}
 .read span:nth-child(even){color:var(--w);font-size:14px;min-width:78px}
-.bot{position:fixed;left:0;right:0;bottom:0;padding:6px 10px calc(env(safe-area-inset-bottom) + 10px);background:linear-gradient(transparent,#000 30%)}
+.bot{position:fixed;left:0;right:0;bottom:0;padding:6px 10px calc(env(safe-area-inset-bottom) + 10px);background:linear-gradient(transparent,#000 30%);max-height:58vh;max-height:58dvh;overflow-y:auto;overscroll-behavior:contain;touch-action:pan-y}
+#rec{border-color:#e8e8e8;font-weight:700}
+#rec.on{background:#e8e8e8;color:#000}
 .row{display:flex;gap:7px;margin-top:7px}
 button{flex:1;min-height:44px;background:#000;color:var(--w);border:1px solid #555;border-radius:10px;font:600 12px/1 inherit;letter-spacing:.14em;padding:0 4px}
 button:active{background:#222}
@@ -35,7 +37,7 @@ button.dim{color:#666;border-color:#2a2a2a}
 #rWhy{display:block;font-size:9px;color:var(--g);font-style:normal;max-width:46vw;letter-spacing:.05em;line-height:1.3}
 #diagp{position:fixed;left:8px;right:8px;top:calc(env(safe-area-inset-top) + 118px);max-height:50vh;overflow:auto;background:rgba(0,0,0,.92);border:1px solid #444;border-radius:10px;padding:8px;z-index:4;touch-action:pan-y}
 #diagt{font-size:10px;line-height:1.38;margin:0 0 8px;white-space:pre-wrap;word-break:break-word;color:#cfcfcf;user-select:text;-webkit-user-select:text}
-#diagp button{width:100%}
+#diagp .row{margin-top:4px}
 #glfail{position:fixed;left:16px;right:16px;top:40%;text-align:center;font-size:12px;line-height:1.5;color:#ddd;border:1px solid #555;border-radius:10px;padding:12px;background:#000;z-index:3}
 body.night #diagt{color:#8a8a8a}
 #upd{position:fixed;left:10px;right:10px;top:calc(env(safe-area-inset-top) + 6px);z-index:6;min-height:44px;background:#e8e8e8;color:#000;border-radius:10px}
@@ -78,23 +80,23 @@ body.night #start{border-color:#5a5a5a}
   <canvas id="spec"></canvas>
   <div id="msg"></div>
   <div class="row">
-    <button id="sonar">SONAR</button><button id="layP" class="on">PASSIVE</button><button id="layS" class="on">ECHO</button><button id="night">NIGHT</button>
+    <button id="sonar">SONAR</button><button id="rec">&#9679; REC</button><button id="diag">DIAG</button><button id="view">3D</button>
   </div>
   <div class="row hide" id="sonrow">
-    <button id="sfreq">F HIGH</button><button id="svol">VOL MED</button><button id="ssens">ECHO NORMAL</button><button id="test">TEST PING</button>
+    <button id="sfreq">F HIGH</button><button id="svol">VOL MED</button><button id="ssens">ECHO STRICT</button><button id="test">TEST PING</button>
+  </div>
+  <div class="row">
+    <button id="layP" class="on">PASSIVE</button><button id="layS" class="on">ECHO</button><button id="night">NIGHT</button><button id="front">SET FRONT</button>
   </div>
   <div class="row" id="bands">
     <button class="on" data-b="0">LOW</button><button class="on" data-b="1">MID</button><button class="on" data-b="2">HIGH</button><button class="on" data-b="3">ULTRA</button>
   </div>
   <div class="row">
-    <button id="front">SET FRONT</button><button id="diag">DIAG</button><button id="rec">REC</button><button id="recdur">10 S</button>
-  </div>
-  <div class="row">
-    <button id="view">3D</button><button id="cal">CAL</button><button id="sens">SENS 2</button><button id="clear">CLEAR</button><button id="csv">CSV</button>
+    <button id="recdur">REC 10 S</button><button id="cal">CAL</button><button id="sens">SENS 2</button><button id="clear">CLEAR</button><button id="csv">CSV</button>
   </div>
 </div>
 
-<div id="diagp" class="hide"><pre id="diagt">collecting…</pre><button id="copyd">COPY DIAG</button></div>
+<div id="diagp" class="hide"><pre id="diagt">collecting…</pre><div class="row"><button id="copyd">COPY DIAG</button><button id="dljson">DOWNLOAD JSON</button></div></div>
 <div id="glfail" class="hide"></div>
 <div id="recb" class="hide">REC</div>
 <div id="recp" class="hide"><div id="rect">capture ready</div><div class="row"><button id="recdl">DOWNLOAD</button><button id="reccp">COPY JSON</button><button id="recx">CLOSE</button></div></div>
@@ -118,7 +120,7 @@ setTimeout(function(){ if(!window.__fvLoaded){ var g=document.getElementById('gl
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
 
 window.__fvLoaded = true;
-const VERSION = 'v2.4';
+const VERSION = 'v2.5';
 const IS_FF = /Firefox\//.test(navigator.userAgent);
 document.getElementById('ver').textContent=VERSION;
 if(IS_FF) document.getElementById('ffhint').classList.remove('hide');
@@ -139,7 +141,7 @@ let sensIdx = 1;
 
 // ==SONAR-DSP-BEGIN==
 // Active sonar, near-ultrasonic coded chirps. Pure functions (unit-tested offline).
-const SON = {f0:17500, f1:20500, dur:0.008, maxR:4.0, gMinMs:2.5, gMaxMs:30, N:4, codeRatio:1.3, relMin:0.003, relMinSelf:0.0005, oobF:15000, oobMax:8, interval:0.36, gain:0.35, pre:0.1, post:0.5, directX:6};
+const SON = {f0:17500, f1:20500, dur:0.004, maxR:4.0, gMinMs:2.5, gMaxMs:26, N:6, codeRatio:0, relMin:0.006, relMinSelf:0.001, cfar:3, sharp:1.2, oobF:15000, oobMax:4, interval:0.36, gain:0.35, pre:0.1, post:0.5, directX:6};
 const SON_CODES = ['UP','DOWN','V'];
 function makeChirp(code, sr){
   const n=Math.round(SON.dur*sr), out=new Float32Array(n); let ph=0; const B=SON.f1-SON.f0;
@@ -184,7 +186,7 @@ function detectPing(raw, code, tpls, secs, sr, latHint, self){
   if(D<SON.directX*fl && !weakOK) return {ok:false,reason:'no direct path (speaker not heard)',D,floor:fl,latCand:D>=3*fl?d-emit:null};
   { let bd=d,bv=0; for(let k=-4;k<=4;k++){ const v=Math.abs(corrAt(x,tpl,d+k)); if(v>bv){bv=v;bd=k+d;} } d=bd; }
   // remove the direct path + speaker ringdown: learned self-response (per code) once available, else the ideal template
-  const pad=Math.round(0.001*sr), Ls=pad+tpl.length+Math.round(0.012*sr), seg=x.slice(d-pad,d-pad+Ls);
+  const pad=Math.round(0.001*sr), Ls=pad+tpl.length+Math.round(0.0015*sr), seg=x.slice(d-pad,d-pad+Ls);
   let selfUsed=false;
   if(self && self.resp[code] && self.n[code]>=3){ const sr0=self.resp[code]; let num=0,den=0; for(let i=0;i<Ls;i++){ num+=seg[i]*sr0[i]; den+=sr0[i]*sr0[i]; }
     const a=num/(den||1); for(let i=0;i<Ls;i++) x[d-pad+i]-=a*sr0[i]; selfUsed=true; }
@@ -192,7 +194,10 @@ function detectPing(raw, code, tpls, secs, sr, latHint, self){
   if(self && self.learn){ const r0=self.resp[code], n0=self.n[code]||0;
     if(!r0){ self.resp[code]=seg; self.n[code]=1; } else { const al=n0<5?1/(n0+1):0.15; for(let i=0;i<Ls;i++) r0[i]+= (seg[i]-r0[i])*al; self.n[code]=n0+1; } }
   const gA=d+Math.round(SON.gMinMs/1000*sr), gB=d+Math.round(SON.gMaxMs/1000*sr);
-  const g=corrEnv(x,tpl,gA,gB), thr=Math.max(SON.N*fl, (selfUsed?SON.relMinSelf:SON.relMin)*D), nms=Math.round(0.001*sr), peaks=[];
+  const sw=Math.round(0.0008*sr), gE=corrEnv(x,tpl,gA-sw,gB+sw), g={a:gA, e:gE.e.subarray(gA-gE.a, gA-gE.a+(gB-gA))};
+  // thresholds: noise (N x pre-ping floor), direct-path relative, and CFAR (K x median of this ping's echo window = diffuse room clutter)
+  const srt=Float32Array.from(g.e).sort(), med=srt[srt.length>>1]||0;
+  const thrN=SON.N*fl, thr=Math.max(thrN,(selfUsed?SON.relMinSelf:SON.relMin)*D,SON.cfar*med), nms=Math.round(0.001*sr), peaks=[];
   let gm=0; for(const v of g.e) if(v>gm) gm=v; const best=gm/fl;
   let profile=null;
   if(self && self.wantProfile){ const pe=corrEnv(x,tpl,d,gB), nb=500; profile=new Float32Array(nb);
@@ -207,18 +212,35 @@ function detectPing(raw, code, tpls, secs, sr, latHint, self){
   const oobRatio=eW/(Math.max(eN,base)+1e-12);
   if(self && (learning || oobRatio<=SON.oobMax)){ self.oob[code]= base ? Math.exp(Math.log(base)*0.8+Math.log(eW+1e-15)*0.2) : eW; self.oobN[code]=(self.oobN[code]||0)+1; }
   if(oobRatio>SON.oobMax && !learning) return {ok:false,reason:'noise burst (clap/knock) rejected',D,floor:fl,oobRatio,lat:d-emit,best,thrX:thr/fl,selfUsed,profile,dIdx:d-emit};
-  for(let i=1;i<g.e.length-1;i++){ const v=g.e[i]; if(v<thr||v<g.e[i-1]||v<g.e[i+1]) continue;
+  for(let i=1;i<g.e.length-1;i++){ const v=g.e[i]; if(v<thrN||v<g.e[i-1]||v<g.e[i+1]) continue;
     const L=g.a+i; if(peaks.length&&L-peaks[peaks.length-1].L<nms){ if(v>peaks[peaks.length-1].v) peaks[peaks.length-1]={L,v}; continue; } peaks.push({L,v}); }
-  const out=[];
-  for(const p of peaks){ // code check: echo must match THIS ping's code, not another sweep
-    let own=0, other=0;
-    for(let k=-3;k<=3;k++) own=Math.max(own,Math.abs(corrAt(x,tpl,p.L+k)));
-    const nb=Math.round(0.0033*sr); for(let k=-nb;k<=nb;k+=1) for(let c=0;c<tpls.length;c++) if(c!==code&&p.L+k>=0) other=Math.max(other,Math.abs(corrAt(x,tpls[c],p.L+k)));
-    if(own<SON.codeRatio*other) continue;
-    out.push({r:(p.L-d)/sr*343/2, snr:p.v/fl});
+  peaks.sort((p,q)=>q.v-p.v);
+  // ringing / sidelobe suppression: a peak within 35 cm of a stronger one and under half its strength is the same echo's ripple
+  const dom=Math.round(0.35*2/343*sr), kept=[]; let rip=0;
+  for(const p of peaks){ if(kept.some(q=>Math.abs(q.L-p.L)<dom && p.v<0.5*q.v)){ rip++; continue; } kept.push(p); } peaks.length=0; peaks.push(...kept);
+  const cnt={found:peaks.length+rip,ripple:rip,thr:0,gate:0,code:0,shape:0,ok:0}, cands=[], out=[], w=Math.round(0.00025*sr);
+  for(const p of peaks.slice(0,16)){
+    const r=(p.L-d)/sr*343/2, c={r, snr:p.v/fl, why:'ok'};
+    if(p.v<thr) c.why='thr'; else if(r>SON.maxR) c.why='gate';
+    else { // code check: THIS ping's code must match better than the other codes at the same delay (±0.25 ms, same search width for all)
+      let own=0, other=0;
+      for(let k=-w;k<=w;k++){ const L=p.L+k; if(L<0) continue; own=Math.max(own,Math.abs(corrAt(x,tpl,L)));
+        for(let cc=0;cc<tpls.length;cc++) if(cc!==code) other=Math.max(other,Math.abs(corrAt(x,tpls[cc],L))); }
+      c.code=own/(other+1e-12);
+      // shape check: a real echo compresses to a sharp spike; a tone, clap or foreign sweep smears over the whole chirp length
+      const si=p.L-gE.a, sa=gE.e[si-sw]||0, sb=gE.e[si+sw]||0; c.sharp=p.v/(Math.min(sa,sb)+1e-12);
+      if(SON.codeRatio>0 && c.code<SON.codeRatio) c.why='code'; else if(c.sharp<SON.sharp || p.v<Math.max(sa,sb)) c.why='shape'; }
+    cnt[c.why]++; if(cands.length<8) cands.push(c); if(c.why==='ok') out.push(c);
   }
-  out.sort((a,b)=>b.snr-a.snr);
-  return {ok:true, peaks:out.slice(0,4), D, floor:fl, oobRatio, best, thrX:thr/fl, raw:peaks.length, lat:d-emit, selfUsed, profile, dIdx:d-emit};
+  cnt.thr+=Math.max(0,peaks.length-16);
+  return {ok:true, peaks:out.slice(0,3), cands, cnt, D, floor:fl, oobRatio, best, thrX:thr/fl, cfarX:SON.cfar*med/fl, raw:peaks.length, lat:d-emit, selfUsed, profile, dIdx:d-emit};
+}
+// repeat check: a peak counts if a recent ping at ~the same heading saw the same range. External sounds don't line up with our jittered ping timing.
+function confirmPeaks(peaks, hdg, hist, need, tolR, tolH){
+  tolR=tolR||0.08; tolH=tolH||(15*Math.PI/180); const prev=need?hist.slice(-Math.max(need,2)):[];
+  return peaks.map(pk=>{ if(!need) return true; let votes=0;
+    for(const h of prev){ const dh=((h.hdg-hdg+Math.PI*3)%(Math.PI*2))-Math.PI; if(Math.abs(dh)>tolH) continue; if(h.peaks.some(q=>Math.abs(q.r-pk.r)<tolR)) votes++; }
+    return votes>=Math.min(need,2); });
 }
 // TEST PING: how strongly does the mic hear the phone's own chirp, and after what delay (searches up to 950 ms)
 function measureDirect(raw, code, tpls, secs, sr, pre){
@@ -542,14 +564,15 @@ function emit(dt){
 
 // ---------- active sonar runtime (opt-in, near-ultrasonic) ----------
 const son={on:false,ready:false,ring:null,R:0,latest:-1,pend:[],hist:[],nextT:0,lastCode:-1,tpls:null,bufs:null,secs:null,out:null,msgT:0,demoNext:0,
-  st:{sent:0,ok:0,rej:0,echo:0,last:null,lastT:-1e9,why:'',played:0,state:'',D:0,floor:0,best:0,thrX:0,bestHist:[],selfUsed:false,oob:null}};
+  st:{sent:0,ok:0,rej:0,echo:0,last:null,lastT:-1e9,why:'',played:0,state:'',D:0,floor:0,best:0,thrX:0,cfarX:0,bestHist:[],selfUsed:false,oob:null,cnt:{},nPk:[],cands:[],candT:-1}};
+son.waves=[]; son.reveal=[]; son.flash=[]; son.clusters=[]; son.log=[];
 son.lat=null; son.latHist=[]; son.noDirect=0;
-const SSENS=[{N:6,cr:1.5,rel:0.006,rs:0.001,prev:2,oob:4,label:'STRICT'},{N:4,cr:1.3,rel:0.003,rs:0.0005,prev:1,oob:8,label:'NORMAL'},{N:3,cr:1.2,rel:0.002,rs:0.0003,prev:0,oob:16,label:'LOOSE'}];
-const SFREQ=[{f0:17500,f1:20500,dur:0.008,vol:1,label:'HIGH'},{f0:10000,f1:14000,dur:0.01,vol:2,label:'MID'},{f0:4000,f1:8000,dur:0.01,vol:1,label:'LOW'}];
+const SSENS=[{N:6,cr:0,rel:0.006,rs:0.001,prev:2,oob:4,label:'STRICT'},{N:4,cr:0,rel:0.003,rs:0.0005,prev:1,oob:8,label:'NORMAL'},{N:3,cr:0,rel:0.002,rs:0.0003,prev:0,oob:16,label:'LOOSE'}];
+const SFREQ=[{f0:17500,f1:20500,dur:0.004,vol:1,label:'HIGH'},{f0:10000,f1:14000,dur:0.004,vol:2,label:'MID'},{f0:4000,f1:8000,dur:0.004,vol:1,label:'LOW'}];
 const SVOL=[{g:0.15,l:'LOW'},{g:0.35,l:'MED'},{g:0.6,l:'HIGH'},{g:0.9,l:'MAX'}]; let svIdx=1, svManual=false;
 function applyVol(){ SON.gain=SVOL[svIdx].g; if(son.out) son.out.gain.value=SON.gain; $('svol').textContent='VOL '+SVOL[svIdx].l; }
 son.self={resp:[],n:[],learn:false,lastHdg:null};
-let ssIdx=1, sfIdx=0;
+let ssIdx=0, sfIdx=0;
 function buildSonar(){ const sr=ac.sampleRate; son.self={resp:[],n:[],learn:false,lastHdg:null}; son.tpls=[0,1,2].map(c=>makeChirp(c,sr)); son.secs=makeBand(sr);
   son.bufs=son.tpls.map(t=>{ const b=ac.createBuffer(1,t.length,sr); b.copyToChannel(t,0); return b; }); if(son.out) son.out.gain.value=SON.gain; }
 function passiveCap(){}
@@ -570,7 +593,7 @@ function sonarTick(){
   if(ac.state!=='running'){ son.st.state='audio paused by browser: tap the screen'; return; }
   if(ac.currentTime>son.nextT-0.06){
     if(son.nextT<ac.currentTime+0.02) son.nextT=ac.currentTime+0.05;
-    let code; do code=Math.floor(Math.random()*3); while(code===son.lastCode); son.lastCode=code;   // coded pings
+    const code=son.lastCode===0?1:0; son.lastCode=code;   // alternate UP / DOWN sweeps: a ghost from one code won't repeat in the other
     const b=ac.createBufferSource(); b.buffer=son.bufs[code]; b.connect(son.out); b.onended=()=>son.st.played++; b.start(son.nextT);
     son.pend.push({e:Math.round(son.nextT*sr),code,hdg:S.heading,el:S.elev}); son.st.sent++;
     son.nextT+=SON.interval+Math.random()*0.04;                                               // jittered timing
@@ -586,7 +609,7 @@ function sonarTick(){
   }
 }
 function handlePing(p,r){
-  const st=son.st; st.D=r.D||0; st.floor=r.floor||0; if(r.best!=null){ st.best=r.best; st.thrX=r.thrX||0; st.bestHist.push(r.best); if(st.bestHist.length>10) st.bestHist.shift(); } st.selfUsed=!!r.selfUsed; st.oob=r.oobRatio;
+  const st=son.st, t0=addWave(p); st.D=r.D||0; st.floor=r.floor||0; if(r.best!=null){ st.best=r.best; st.thrX=r.thrX||0; st.cfarX=r.cfarX||0; st.bestHist.push(r.best); if(st.bestHist.length>10) st.bestHist.shift(); } st.selfUsed=!!r.selfUsed; st.oob=r.oobRatio;
   const lc = r.lat!=null ? r.lat : r.latCand;
   if(lc!=null){ son.latHist.push(lc); if(son.latHist.length>7) son.latHist.shift();
     if(son.latHist.length>=3){ const m=[...son.latHist].sort((a,b)=>a-b)[son.latHist.length>>1]; if(son.latHist.filter(v=>Math.abs(v-m)<0.01*ac.sampleRate).length>=3) son.lat=m; } }
@@ -595,14 +618,57 @@ function handlePing(p,r){
   else son.noDirect=0;
   if(!r.ok){ recPing(p,r,0); st.rej++; st.why=r.reason; st.state=r.reason; son.hist.push({hdg:p.hdg,peaks:[]}); if(son.hist.length>3) son.hist.shift(); return; }
   st.ok++; st.why='';
-  const need=SSENS[ssIdx].prev, prev=need?son.hist.slice(-need):[]; let plotted=0;
-  st.state = !r.selfUsed ? 'learning speaker self-response ('+Math.min(...[0,1,2].map(c=>son.self.n[c]||0))+'/3 per chirp code, keep sweeping)' : r.peaks.length ? 'echo seen, waiting for a repeat ping' : (r.raw ? 'peaks failed the code check' : 'no echo above threshold (best '+st.best.toFixed(1)+'x floor)');
-  for(const pk of r.peaks){   // consistency: same range (±12 cm) in a recent ping at ~the same heading (none needed in LOOSE)
-    let votes=0; for(const h of prev){ if(Math.abs(angDiff(h.hdg,p.hdg))>12*D2R) continue; if(h.peaks.some(q=>Math.abs(q.r-pk.r)<0.12)) votes++; }
-    if((need===0||votes>=1) && pk.r<=SON.maxR){ plotted++; st.lastT=S.now;  st.state='echo'; const inten=Math.min(1,Math.log10(pk.snr)/3); for(let k=0;k<6;k++) spawnSonar(p.hdg,p.el,pk.r,inten); son.st.echo++; son.st.last=pk.r; }
-  }
+  const okv=confirmPeaks(r.peaks,p.hdg,son.hist,SSENS[ssIdx].prev); let plotted=0;
+  r.peaks.forEach((pk,i)=>{ pk.conf=okv[i]; if(!okv[i]) pk.why='repeat'; });
+  if(r.cnt){ for(const k in r.cnt) st.cnt[k]=(st.cnt[k]||0)+r.cnt[k]; st.cnt.repeat=(st.cnt.repeat||0)+okv.filter(v=>!v).length; st.nPk.push(r.cnt.found); if(st.nPk.length>20) st.nPk.shift(); }
+  if(r.cands&&r.cands.length){ st.cands=r.cands.slice(0,5); st.candT=S.now; }
+  for(const pk of r.peaks){ if(!pk.conf||pk.r>SON.maxR) continue; plotted++; queueEcho(p.hdg,p.el,pk.r,Math.min(1,Math.log10(pk.snr)/3),t0); }
+  if(plotted) st.ok2=(st.ok2||0)+1;
+  st.state = !r.selfUsed ? 'learning speaker self-response ('+Math.min(...[0,1].map(c=>son.self.n[c]||0))+'/3 per chirp code, keep sweeping)'
+    : plotted ? 'echo' : r.peaks.length ? 'echo seen, waiting for a repeat ping'
+    : (r.cnt&&r.cnt.found ? 'peaks rejected: '+['thr','shape','gate','code'].filter(k=>r.cnt[k]).map(k=>WHY[k]+' '+r.cnt[k]).join(', ') : 'no echo above threshold (best '+st.best.toFixed(1)+'x floor)');
   son.hist.push({hdg:p.hdg,peaks:r.peaks}); if(son.hist.length>3) son.hist.shift();
   recPing(p,r,plotted);
+}
+const WHY={ok:'ok',thr:'below threshold',shape:'not a clean echo',gate:'beyond 4 m',code:'wrong code',repeat:'no repeat',ripple:'ripple of a stronger echo'};
+// ---------- ping wave + delayed echo reveal (sound slowed ~100x so you can watch it travel) ----------
+const VIS_V=3.2;   // on-screen wave speed in m/s (real sound: 343 m/s)
+function addWave(p){ son.waves.push({t:S.now,hdg:p.hdg,el:p.el||0}); if(son.waves.length>10) son.waves.shift(); return S.now; }
+function queueEcho(hdg,el,r,inten,t0){ son.reveal.push({t:t0+r/VIS_V,hdg,el,r,inten}); }
+function revealTick(){
+  for(let i=son.reveal.length-1;i>=0;i--){ const e=son.reveal[i]; if(S.now<e.t) continue; son.reveal.splice(i,1);
+    for(let k=0;k<8;k++) spawnSonar(e.hdg,e.el,e.r,e.inten);
+    son.flash.push({t:S.now,hdg:e.hdg,el:e.el,r:e.r}); if(son.flash.length>16) son.flash.shift();
+    const st=son.st; st.echo++; st.last=e.r; st.lastT=S.now; st.state='echo';
+    const c=son.clusters.find(c=>Math.abs(angDiff(c.hdg,e.hdg))<10*D2R && Math.abs(c.r-e.r)<0.12);
+    if(c){ c.r=c.r*0.7+e.r*0.3; c.hdg+=angDiff(e.hdg,c.hdg)*0.3; c.el=e.el; c.t=S.now; c.n++; }
+    else { son.clusters.push({hdg:e.hdg,el:e.el,r:e.r,t:S.now,n:1}); if(son.clusters.length>40) son.clusters.shift(); }
+  }
+  const life=SON.maxR/VIS_V+0.2; while(son.waves.length && S.now-son.waves[0].t>life) son.waves.shift();
+}
+const _v=new THREE.Vector3();
+function echoXY(hdg,el,r){   // screen position of a world point (heading, elevation, range m) in the current view
+  if(S.view==='radar'){ const a=hdg-S.heading, R=r/SON.maxR*0.98*RP; return [cx+Math.sin(a)*R, cy-Math.cos(a)*R, true]; }
+  const r3=r/SON.maxR*2.85, ce=Math.cos(el); _v.set(ce*Math.sin(hdg)*r3, Math.sin(el)*r3, -ce*Math.cos(hdg)*r3).project(cam3);
+  return [(_v.x+1)/2*W, (1-_v.y)/2*H, _v.z<1 && _v.z>-1];
+}
+function drawSonarFx(){
+  const g=hx, radar=S.view==='radar', dim=night?0.5:1, n=radar?200:140;
+  // expanding ping rings: thin rings of nano dots, brighter toward where the phone pointed, fading with distance
+  for(const w of son.waves){ const r=(S.now-w.t)*VIS_V; if(r<0.04||r>SON.maxR) continue; const fall=1-r/SON.maxR, a0=0.42*fall*dim;
+    for(let i=0;i<n;i++){ const az=w.hdg+(i/n-0.5)*Math.PI*2, d=(i/n-0.5)*Math.PI*2, fwd=Math.exp(-d*d/0.12), a=a0*(0.35+1.65*fwd);
+      if(a<0.012) continue; const [x,y,ok]=echoXY(az,radar?0:w.el,r); if(!ok) continue;
+      g.fillStyle='rgba(255,255,255,'+Math.min(1,a).toFixed(3)+')'; const sz=fwd>0.5?1.6:1.1; g.fillRect(x-sz/2,y-sz/2,sz,sz); } }
+  // echo flash when the wave reaches a detected echo
+  for(const f of son.flash){ const age=S.now-f.t; if(age>0.9) continue; const [x,y,ok]=echoXY(f.hdg,f.el,f.r); if(!ok) continue; const k=1-age/0.9;
+    g.strokeStyle='rgba(255,255,255,'+(0.85*k*dim).toFixed(3)+')'; g.lineWidth=1; g.beginPath(); g.arc(x,y,3+age*22,0,7); g.stroke();
+    g.fillStyle='rgba(255,255,255,'+(k*dim).toFixed(3)+')'; g.beginPath(); g.arc(x,y,2.2*k+0.6,0,7); g.fill(); }
+  // distance labels next to the freshest echo clusters
+  const lab=son.clusters.filter(c=>S.now-c.t<20).sort((a,b)=>b.t-a.t).slice(0,6), used=[];
+  g.font='10px ui-monospace,monospace'; g.textAlign='left'; g.textBaseline='middle';
+  for(const c of lab){ const [x,y,ok]=echoXY(c.hdg,c.el,c.r); if(!ok) continue; if(used.some(u=>Math.abs(u[0]-x)<46&&Math.abs(u[1]-y)<12)) continue; used.push([x,y]);
+    const a=(0.35+0.6*Math.max(0,1-(S.now-c.t)/20))*dim; g.strokeStyle='rgba(255,255,255,'+(a*0.5).toFixed(3)+')'; g.beginPath(); g.moveTo(x+3,y-3); g.lineTo(x+9,y-9); g.stroke();
+    g.fillStyle='rgba(255,255,255,'+a.toFixed(3)+')'; g.fillText(c.r.toFixed(2)+' m',x+11,y-10); }
 }
 function demoSonar(){   // simulated room 4.0 x 4.9 m with a pillar at 075° / 1.2 m
   if(S.now<son.demoNext) return; son.demoNext=S.now+SON.interval;
@@ -612,7 +678,7 @@ function demoSonar(){   // simulated room 4.0 x 4.9 m with a pillar at 075° / 1
   son.st.sent++; son.st.ok++;
   if(rec.active){ const prof=new Float32Array(500); for(let b=0;b<500;b++){ let v=1+Math.random()*1.5; if(b<30) v+=60*Math.exp(-b/6); for(const r of hits){ if(r<=SON.maxR) v+=180*Math.exp(-Math.pow((b*0.01-r)/0.025,2)); } prof[b]=v; }
     recPing({hdg:h,el:S.elev,code:-1},{ok:true,D:80,dIdx:1934,floor:0.0045,best:Math.max(...prof.slice(25)),thrX:8,oobRatio:1,selfUsed:true,peaks:hits.filter(r=>r>0.3&&r<=SON.maxR).map(r=>({r,snr:180})),profile:prof},hits.length); }
-  son.st.state='no echo in range'; for(const r of hits){ if(r>0.3&&r<=SON.maxR){ for(let k=0;k<6;k++) spawnSonar(h,S.elev,r,0.8); son.st.echo++; son.st.last=r; son.st.lastT=S.now; son.st.state='echo'; } }
+  const t0=addWave({hdg:h,el:S.elev}); son.st.state='no echo in range'; for(const r of hits){ if(r>0.3&&r<=SON.maxR) queueEcho(h,S.elev,r,0.8,t0); }
 }
 $('sonar').onclick=async()=>{
   if(!DEMO){
@@ -621,6 +687,8 @@ $('sonar').onclick=async()=>{
     if(!son.ready){ try{ await sonarInit(); }catch(e){ son.st.state='init failed: '+(e.message||e); msg('Sonar unavailable on this browser: '+(e.message||e)); return; } }
   }
   son.on=!son.on; son.nextT=0; son.pend.length=0; son.hist.length=0;
+  common.uShowP.value=son.on?0:1; $('layP').className=son.on?'dim':'on'; $('bands').classList.toggle('hide',son.on);
+  if(son.on) msg('SONAR on · passive sound haze hidden so only echoes show (tap PASSIVE to bring it back)');
   passiveCap();   // keep chirps out of the passive layer
   $('range').classList.toggle('hide',!son.on); $('sonrow').classList.toggle('hide',!son.on); son.st.state=son.on?'starting…':''; resize();
   $('sonar').textContent='SONAR'; $('sonar').className=son.on?'on':'';
@@ -641,7 +709,7 @@ async function testPing(){
   if(!son.ready){ try{ await sonarInit(); }catch(e){ msg('Sonar unavailable: '+(e.message||e)); return; } }
   if(tp.active) return;
   const sr=ac.sampleRate; let t=ac.currentTime+0.15; tp.active=true; tp.pend=[]; tp.res=[];
-  for(let i=0;i<5;i++){ const code=i%3, b=ac.createBufferSource(); b.buffer=son.bufs[code]; b.connect(son.out); b.onended=()=>son.st.played++; b.start(t); tp.pend.push({e:Math.round(t*sr),code}); t+=1.0+Math.random()*0.3; }   // jittered so a periodic noise can't fake a PASS
+  for(let i=0;i<5;i++){ const code=i%2, b=ac.createBufferSource(); b.buffer=son.bufs[code]; b.connect(son.out); b.onended=()=>son.st.played++; b.start(t); tp.pend.push({e:Math.round(t*sr),code}); t+=1.0+Math.random()*0.3; }   // jittered so a periodic noise can't fake a PASS
   $('test').className='on'; $('range').classList.remove('hide'); $('rRange').textContent='TEST…'; $('rWhy').textContent='5 chirps, keep still'; tp.text='running'; msg('TEST PING: 5 chirps over 5 s, keep the phone still');
 }
 function testTick(){
@@ -682,7 +750,11 @@ const r1=v=>Math.round(v*10)/10, r2=v=>Math.round(v*100)/100, r3=v=>Math.round(v
 function recStart(){
   if(rec.active) return;
   rec.active=true; rec.dur=REC_DURS[recDurIdx]; rec.t0=S.now; rec.frames=[]; rec.pings=[]; rec.lastF=-1; son.self.wantProfile=true;
-  rec.header={app:'Field Vision',version:VERSION,demo:DEMO,started:new Date().toISOString(),ua:navigator.userAgent,
+  rec.header=recHeader();
+  $('recb').classList.remove('hide'); $('recp').classList.add('hide'); $('rec').className='on';
+}
+function recHeader(){
+  return {app:'Field Vision',version:VERSION,demo:DEMO,started:new Date().toISOString(),ua:navigator.userAgent,
     screen:{w:W,h:H,dpr:devicePixelRatio,orientation:screen.orientation?screen.orientation.type:null},
     audio:{state:ac?ac.state:null,sampleRate:ac?ac.sampleRate:48000,baseLatencyMs:ac&&ac.baseLatency!=null?r1(ac.baseLatency*1000):null,channels:S.micCh||null,mic:S.micSettings||null},
     sonar:{on:son.on,band:SFREQ[sfIdx].label,f0:SON.f0,f1:SON.f1,chirpMs:SON.dur*1000,gain:SON.gain,vol:SVOL[svIdx].l,sens:SSENS[ssIdx].label,N:SON.N,relMin:SON.relMin,relMinSelf:SON.relMinSelf,oobMax:SON.oobMax,
@@ -693,9 +765,8 @@ function recStart(){
     view:S.view,night:night,
     legend:{frame:['t_s','heading_deg','elev_deg','alpha','beta','gamma','mic_rms_dbfs','low_db','mid_db','high_db','ultra_db','dominant_hz','spec64_dbfs[]'],
       spec64Hz:specHz(),
-      ping:'t_s, code (UP/DOWN/V), heading/elev deg, ok, reason, direct (corr peak), directIdx (samples after emit), floor, best/thr (x floor), oob ratio, selfUsed, peaks [[range_m, snr_x_floor]], plotted, profile = echo envelope in x noise floor, 1 cm bins from 0 to 5 m after the direct path',
+      ping:'t_s, code (UP/DOWN/V), heading/elev deg, ok, reason, direct (corr peak), directIdx (samples after emit), floor, best/thr (x floor), oob ratio, selfUsed, peaks [[range_m, snr_x_floor, repeat_confirmed]], cands [[range_m, snr, why (ok/thr/shape/gate/code/repeat), sharpness]], cnt (per-ping peak counts by fate), plotted, profile = echo envelope in x noise floor, 1 cm bins from 0 to 5 m after the direct path',
       particle:'[x_east_m_scaled, y_up, z_south, brightness 0-1, type 0=passive 1=sonar] in 3D view units (sonar: 2.85 units = 4 m)'}};
-  $('recb').classList.remove('hide'); $('recp').classList.add('hide'); $('rec').className='on';
 }
 function recFrame(){
   if(!rec.active) return; const t=S.now-rec.t0;
@@ -707,12 +778,16 @@ function recFrame(){
   $('recb').textContent='REC '+Math.max(0,Math.ceil(rec.dur-t))+'s…';
   if(t>=rec.dur) recStop();
 }
+function pingRec(p,r,plotted,withProfile){
+  return {t:r2(S.now-(rec.active?rec.t0:0)),code:SON_CODES[p.code]||'SIM',hdg:r1(p.hdg*R2D),elev:r1(p.el*R2D),ok:!!r.ok,reason:r.reason||null,
+    direct:r.D!=null?r3(r.D):null,directIdx:r.dIdx!=null?r.dIdx:null,floor:r.floor!=null?+r.floor.toPrecision(3):null,best:r.best!=null?r1(r.best):null,thr:r.thrX!=null?r1(r.thrX):null,cfar:r.cfarX!=null?r1(r.cfarX):null,
+    oob:r.oobRatio!=null?r2(r.oobRatio):null,selfUsed:!!r.selfUsed,peaks:(r.peaks||[]).map(k=>[r3(k.r),r1(k.snr),k.conf?1:0]),plotted,
+    cands:(r.cands||[]).map(c=>[r3(c.r),r1(c.snr),c.why,c.sharp!=null?r2(Math.min(c.sharp,99)):null]),cnt:r.cnt||null,
+    profile:withProfile&&r.profile?Array.from(r.profile,v=>v<10?r1(v):Math.round(v)):null};
+}
 function recPing(p,r,plotted){
-  if(!rec.active) return;
-  rec.pings.push({t:r2(S.now-rec.t0),code:SON_CODES[p.code]||'SIM',hdg:r1(p.hdg*R2D),elev:r1(p.el*R2D),ok:!!r.ok,reason:r.reason||null,
-    direct:r.D!=null?r3(r.D):null,directIdx:r.dIdx!=null?r.dIdx:null,floor:r.floor!=null?+r.floor.toPrecision(3):null,best:r.best!=null?r1(r.best):null,thr:r.thrX!=null?r1(r.thrX):null,
-    oob:r.oobRatio!=null?r2(r.oobRatio):null,selfUsed:!!r.selfUsed,peaks:(r.peaks||[]).map(k=>[r3(k.r),r1(k.snr)]),plotted,
-    profile:r.profile?Array.from(r.profile,v=>v<10?r1(v):Math.round(v)):null});
+  son.log.push(pingRec(p,r,plotted,false)); if(son.log.length>150) son.log.shift();
+  if(rec.active) rec.pings.push(pingRec(p,r,plotted,true));
 }
 function particleSnapshot(){
   const out=[]; for(let k=0;k<CAP&&out.length<5000;k++){ const i=((head-1-k)%CAP+CAP)%CAP, age=S.now-aMeta[i*3]; if(age<0||age>FADE) continue;
@@ -736,7 +811,7 @@ function recDownload(){ if(!rec.json) return;
   a.href=url; a.download=rec.name; a.rel='noopener'; a.style.display='none'; document.body.appendChild(a); a.click();   // attached link: Firefox Android needs this
   setTimeout(()=>{ a.remove(); URL.revokeObjectURL(url); },8000); }
 $('rec').onclick=()=>{ if(rec.active){ recStop(); return; } recStart(); };
-$('recdur').onclick=()=>{ recDurIdx=(recDurIdx+1)%REC_DURS.length; $('recdur').textContent=REC_DURS[recDurIdx]+' S'; };
+$('recdur').onclick=()=>{ recDurIdx=(recDurIdx+1)%REC_DURS.length; $('recdur').textContent='REC '+REC_DURS[recDurIdx]+' S'; };
 $('recdl').onclick=recDownload;
 $('recx').onclick=()=>$('recp').classList.add('hide');
 $('reccp').onclick=async()=>{ if(rec.json.length>600000){ msg('Too big to copy ('+Math.round(rec.json.length/1024)+' KB): use DOWNLOAD'); return; }
@@ -777,10 +852,11 @@ function drawRadarHud(){
   const g=hx, Hd=S.heading;
   // rings
   g.lineWidth=1;
-  for(let i=0;i<BANDS.length;i++){ const r=BANDS[i].r2[1]*RP; g.strokeStyle=i===3?'#3c3c3c':'#232323'; g.beginPath(); g.arc(cx,cy,r,0,7); g.stroke(); }
+  const showBands=!son.on||common.uShowP.value;
+  if(showBands) for(let i=0;i<BANDS.length;i++){ const r=BANDS[i].r2[1]*RP; g.strokeStyle=i===3?'#3c3c3c':'#232323'; g.beginPath(); g.arc(cx,cy,r,0,7); g.stroke(); }
   g.strokeStyle='#4a4a4a'; g.beginPath(); g.arc(cx,cy,RP*1.03,0,7); g.stroke();
   g.fillStyle='#4d4d4d'; g.font='9px ui-monospace,monospace'; g.textAlign='left';
-  BANDS.forEach((b,i)=>g.fillText(b.name,cx+4,cy-(b.r2[0]+0.03)*RP+ (i?0:0)));
+  if(showBands) BANDS.forEach((b,i)=>g.fillText(b.name,cx+4,cy-(b.r2[0]+0.03)*RP));
   // spokes + compass ticks (rotate with heading)
   for(let d=0;d<360;d+=5){
     const a=(d*D2R-Hd); const s=Math.sin(a), c=-Math.cos(a);
@@ -815,8 +891,8 @@ function drawRadarHud(){
   if(pi>=0&&pk>3){ const a=(pi*5+2.5)*D2R-Hd, r=RP*0.985; const px=cx+Math.sin(a)*r, py=cy-Math.cos(a)*r;
     g.strokeStyle='#fff'; g.beginPath(); g.arc(px,py,6,0,7); g.stroke(); g.beginPath(); g.arc(px,py,10,0,7); g.globalAlpha=0.35; g.stroke(); g.globalAlpha=1;
     S.peakTxt=`${String(Math.round(pi*5+2.5)).padStart(3,'0')}° +${pk.toFixed(0)}`; } else S.peakTxt='---';
-  if(son.on){ g.setLineDash([2,5]); g.strokeStyle='#3a3a3a'; g.fillStyle='#6a6a6a'; g.font='9px ui-monospace,monospace';
-    for(let m=1;m<=SON.maxR;m++){ const r=m/SON.maxR*0.98*RP; g.beginPath(); g.arc(cx,cy,r,0,7); g.stroke(); g.fillText(m+'m',cx+r*0.72+8,cy+r*0.72); }
+  if(son.on){ g.setLineDash([2,5]); g.strokeStyle='#3a3a3a'; g.fillStyle='#9a9a9a'; g.font='10px ui-monospace,monospace';
+    for(let m=0.5;m<=SON.maxR;m+=0.5){ const r=m/SON.maxR*0.98*RP, whole=m%1===0; g.strokeStyle=whole?'#3a3a3a':'#1e1e1e'; g.beginPath(); g.arc(cx,cy,r,0,7); g.stroke(); if(whole) g.fillText(m+' m',cx+r*0.71+12,cy+r*0.71+2); }
     g.setLineDash([]); }
   // Peter
   g.fillStyle='#fff'; g.beginPath(); g.arc(cx,cy,4.5,0,7); g.fill();
@@ -933,10 +1009,19 @@ function diagText(){
   L.push(`SONAR chirp ${SON.dur*1000} ms · VOL ${SVOL[svIdx].l} · self-response ${son.self&&son.self.n.length?son.self.n.map(v=>v||0).join('/'):'0'} pings learned · used ${st.selfUsed} · out-of-band ratio ${f(st.oob)} (limit ${SON.oobMax})`);
   L.push(`SONAR best echo last 10 pings ${st.bestHist.length?f(Math.max(...st.bestHist)):'--'}x floor · TEST PING ${tp.text||'not run'}`);
   L.push(`SONAR round-trip latency ${son.lat!=null&&ac?f(son.lat/ac.sampleRate*1000)+' ms (locked)':'learning'} · no-direct streak ${son.noDirect}`);
+  { const c=st.cnt, tot=k=>c[k]||0, np=st.nPk;
+    L.push(`SONAR peaks per ping (last ${np.length}) avg ${np.length?f(np.reduce((a,b)=>a+b,0)/np.length):'--'} max ${np.length?Math.max(...np):'--'} · threshold parts: noise ${SON.N}x · CFAR ${f(st.cfarX)}x · final ${f(st.thrX)}x floor`);
+    L.push(`SONAR peak fates (total): found ${tot('found')} · ripple ${tot('ripple')} · below threshold ${tot('thr')} · not clean echo ${tot('shape')} · beyond ${SON.maxR} m ${tot('gate')} · wrong code ${tot('code')} · no repeat ${tot('repeat')} · passed ${tot('ok')-tot('repeat')} · pings with plotted echo ${st.ok2||0}`);
+    L.push(`SONAR last candidates (${st.candT>0?f(S.now-st.candT)+' s ago':'none yet'}): ${st.cands.map(c=>`${f(c.r,2)}m ${f(c.snr,0)}x ${c.why}${c.sharp!=null?' sh'+f(Math.min(c.sharp,99)):''}`).join(' · ')||'--'}`); }
   L.push(`SONAR last range ${st.last!=null?f(st.last,2)+' m':'--'} (${st.lastT>0?f(S.now-st.lastT)+' s ago':'never'}) · status ${st.state||'--'}${st.why?' · last reject: '+st.why:''}`);
   L.push(`ERRORS ${(window.__fvErr||[]).join(' | ')||'none'}`);
   return L.join('\n');
 }
+$('dljson').onclick=()=>{ let header=null; try{ header=recHeader(); }catch(e){}
+  const d=new Date(), z=n=>String(n).padStart(2,'0'), name=`field-vision-diag-${d.getFullYear()}${z(d.getMonth()+1)}${z(d.getDate())}-${z(d.getHours())}${z(d.getMinutes())}${z(d.getSeconds())}.json`;
+  const json=JSON.stringify({kind:'diag',diag:diagText(),header,pings:son.log,particles:particleSnapshot()});
+  const url=URL.createObjectURL(new Blob([json],{type:'application/json'})), a=document.createElement('a'); a.href=url; a.download=name; a.style.display='none'; document.body.appendChild(a); a.click();
+  setTimeout(()=>{ a.remove(); URL.revokeObjectURL(url); },8000); msg('Saved '+name+' ('+Math.round(json.length/1024)+' KB, last '+son.log.length+' pings). Send it to Grok Bot.'); };
 function updateDiag(){ try{ $('diagt').textContent=diagText(); }catch(e){ $('diagt').textContent='diag error: '+e.message; } }
 $('copyd').onclick=async()=>{ const t=diagText();
   try{ await navigator.clipboard.writeText(t); msg('Diagnostics copied. Paste them to Grok Bot.'); }
@@ -970,7 +1055,7 @@ function step(now,dt){
   if(S.running){
     if(DEMO) demoMotion();
     analyse(); emit(dt); logRow();
-    if(DEMO){ if(son.on) demoSonar(); } else { sonarTick(); testTick(); }
+    if(DEMO){ if(son.on) demoSonar(); } else { sonarTick(); testTick(); } revealTick();
     if(son.on && now-son.msgT>250){ son.msgT=now; const st=son.st, fresh=st.last!=null && S.now-st.lastT<2.5;
       $('rRange').textContent = fresh ? st.last.toFixed(2)+' m' : '--';
       $('rWhy').textContent = fresh ? `${SFREQ[sfIdx].label} · ${SSENS[ssIdx].label}` : (st.state||'waiting for first ping');
@@ -984,6 +1069,7 @@ function step(now,dt){
   hx.clearRect(0,0,W,H);
   if(S.view==='radar'){ if(renderer) renderer.render(sceneR,camR); drawRadarHud(); }
   else { update3DCam(); if(renderer) renderer.render(scene3,cam3); draw3DHud(); }
+  drawSonarFx();
   drawSpectrum();
   if(night){ for(const [c,w,h] of [[hx,W,H],[sx,spec.width,spec.height]]){ c.save(); c.setTransform(1,0,0,1,0,0); c.globalCompositeOperation='destination-out'; c.fillStyle='rgba(0,0,0,0.5)'; c.fillRect(0,0,c.canvas.width,c.canvas.height); c.restore(); } }
   // readouts
@@ -1001,8 +1087,8 @@ resize();
 if(DEMO){
   // pre-fill ~25 s of sweeping so the map is populated immediately
   S.running=true; $('overlay').classList.add('hide'); msg('DEMO · synthetic sources at 040° voice, 205° hum, 300° whine, 120° traffic');
-  const save=S.t0; son.on=true; $('sonar').className='on'; $('range').classList.remove('hide'); $('sonrow').classList.remove('hide'); resize();
-  for(let k=0;k<25*30;k++){ S.now=k/30; demoMotion(); analyse(); emit(1/30); demoSonar(); }
+  const save=S.t0; son.on=true; $('sonar').className='on'; common.uShowP.value=0; $('layP').className='dim'; $('bands').classList.add('hide'); $('range').classList.remove('hide'); $('sonrow').classList.remove('hide'); resize();
+  for(let k=0;k<25*30;k++){ S.now=k/30; demoMotion(); analyse(); emit(1/30); demoSonar(); revealTick(); }
   son.demoNext=0;
   S.t0=performance.now()-25000; flushParticles(); head=head; dirtyFrom=0; dirtyCount=CAP; flushParticles();
 }
