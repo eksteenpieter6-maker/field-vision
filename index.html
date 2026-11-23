@@ -57,6 +57,37 @@ body.night #start{border-color:#5a5a5a}
 #overlay h1{font-size:20px;letter-spacing:.35em;margin:0 0 6px;font-weight:600}
 #overlay p{color:var(--g);font-size:12px;line-height:1.6;max-width:340px;margin:6px 0}
 #overlay button{flex:none;width:min(320px,80vw);margin-top:18px}
+/* v2.6 simple UI */
+.read span.x{display:none}
+.bot{max-height:none;overflow:visible;padding:4px 12px calc(env(safe-area-inset-bottom) + 12px)}
+.seg{flex:1;display:flex;border:1px solid #555;border-radius:12px;overflow:hidden}
+.seg button{border:0;border-radius:0;min-height:52px;font-size:13px}
+.seg button+button{border-left:1px solid #555}
+#gear{flex:none;width:62px;min-height:54px;font-size:24px;letter-spacing:0;padding:0}
+#go{display:block;width:100%;min-height:76px;margin-top:10px;border-radius:16px;border:2px solid #e8e8e8;font-size:20px;letter-spacing:.32em;font-weight:700}
+#go.stop{background:#e8e8e8;color:#000}
+body.night #go{border-color:#5a5a5a} body.night #go.stop{background:#3a3a3a}
+.sheet{position:fixed;left:0;right:0;bottom:0;z-index:7;max-height:86vh;max-height:86dvh;overflow-y:auto;overscroll-behavior:contain;touch-action:pan-y;background:#050505;border-top:1px solid #555;border-radius:18px 18px 0 0;padding:14px 16px calc(env(safe-area-inset-bottom) + 16px)}
+.shead{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.shead b{font-size:14px;letter-spacing:.3em}
+.shead button{flex:none;width:96px}
+.sl{display:block;margin:16px 0 4px;font-size:11px;letter-spacing:.2em;color:var(--g)}
+.sl span{float:right;color:var(--w);letter-spacing:.08em;font-size:13px}
+.hint{font-size:10px;color:#6a6a6a;line-height:1.4;margin-top:2px}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:44px;background:transparent;margin:0;touch-action:pan-x}
+input[type=range]::-webkit-slider-runnable-track{height:3px;background:#555;border-radius:2px}
+input[type=range]::-moz-range-track{height:3px;background:#555;border-radius:2px}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:30px;height:30px;border-radius:50%;background:#e8e8e8;margin-top:-13.5px;border:0}
+input[type=range]::-moz-range-thumb{width:30px;height:30px;border-radius:50%;background:#e8e8e8;border:0}
+details{margin-top:18px;border-top:1px solid #2a2a2a;padding-top:10px}
+summary{font-size:12px;letter-spacing:.3em;color:var(--g);min-height:44px;line-height:44px;list-style:none}
+summary::-webkit-details-marker{display:none}
+details[open] summary{color:var(--w)}
+#spec{height:46px;margin-top:6px}
+.big{display:block;width:100%;min-height:60px;margin-top:10px;font-size:14px;text-align:left;padding:0 16px}
+.big small{display:block;font-size:10px;color:var(--g);letter-spacing:.05em;margin-top:4px;font-weight:400}
+#saveInfo{font-size:11px;color:#bdbdbd;line-height:1.45;margin:4px 0 4px}
+#diagp{z-index:8}
 </style>
 </head>
 <body>
@@ -64,51 +95,67 @@ body.night #start{border-color:#5a5a5a}
 <canvas id="hud"></canvas>
 
 <div class="top">
-  <div class="title">FIELD VISION <span id="ver"></span><b>SOUND RADAR</b><span id="mode" style="font-size:10px;letter-spacing:.2em">RADAR · HEADING-UP</span>
-    <div id="range" class="hide"><small>SONAR RANGE</small><span id="rRange">--</span><em id="rWhy"></em></div></div>
+  <div class="title">FIELD VISION <span id="ver"></span><b>SOUND RADAR</b><span id="mode" style="font-size:10px;letter-spacing:.2em">SONAR · HEADING-UP</span>
+    <div id="range" class="hide"><small>ECHO RANGE</small><span id="rRange">--</span><em id="rWhy"></em></div></div>
   <div class="read">
-    <span>LEVEL</span><span id="rDb">-- dB</span>
-    <span>FREQ</span><span id="rHz">-- Hz</span>
+    <span class="x">LEVEL</span><span class="x" id="rDb">-- dB</span>
+    <span class="x">FREQ</span><span class="x" id="rHz">-- Hz</span>
     <span>HDG</span><span id="rHdg">---°</span>
     <span>ELEV</span><span id="rEl">--°</span>
-    <span>PEAK</span><span id="rPk">---</span>
-    <span id="rStL">MIC</span><span id="rSt">--</span>
+    <span class="x">PEAK</span><span class="x" id="rPk">---</span>
+    <span class="x" id="rStL">MIC</span><span class="x" id="rSt">--</span>
   </div>
 </div>
 
 <div class="bot">
-  <canvas id="spec"></canvas>
-  <div id="msg"></div>
+  <div id="msg">Point the top of the phone like a torch, tap START, sweep slowly.</div>
   <div class="row">
-    <button id="sonar">SONAR</button><button id="rec">&#9679; REC</button><button id="diag">DIAG</button><button id="view">3D</button>
+    <div class="seg"><button id="vRadar" class="on">SONAR</button><button id="v3d">3D</button></div>
+    <button id="gear" aria-label="Settings">&#9881;</button>
   </div>
-  <div class="row hide" id="sonrow">
-    <button id="sfreq">F HIGH</button><button id="svol">VOL MED</button><button id="ssens">ECHO STRICT</button><button id="test">TEST PING</button>
-  </div>
-  <div class="row">
-    <button id="layP" class="on">PASSIVE</button><button id="layS" class="on">ECHO</button><button id="night">NIGHT</button><button id="front">SET FRONT</button>
-  </div>
-  <div class="row" id="bands">
-    <button class="on" data-b="0">LOW</button><button class="on" data-b="1">MID</button><button class="on" data-b="2">HIGH</button><button class="on" data-b="3">ULTRA</button>
-  </div>
-  <div class="row">
-    <button id="recdur">REC 10 S</button><button id="cal">CAL</button><button id="sens">SENS 2</button><button id="clear">CLEAR</button><button id="csv">CSV</button>
-  </div>
+  <button id="go">START</button>
 </div>
 
-<div id="diagp" class="hide"><pre id="diagt">collecting…</pre><div class="row"><button id="copyd">COPY DIAG</button><button id="dljson">DOWNLOAD JSON</button></div></div>
-<div id="glfail" class="hide"></div>
-<div id="recb" class="hide">REC</div>
-<div id="recp" class="hide"><div id="rect">capture ready</div><div class="row"><button id="recdl">DOWNLOAD</button><button id="reccp">COPY JSON</button><button id="recx">CLOSE</button></div></div>
-<button id="upd" class="hide">NEW VERSION AVAILABLE · TAP TO RELOAD</button>
-<div id="overlay">
-  <h1>SOUND RADAR</h1>
-  <p>Point the top of your phone like a torch. Sweep slowly around you. Loud or interesting directions build up dense particle clouds.</p>
-  <p>Hold the phone at arm's length with your body behind it: your body blocks sound from behind, which sharpens direction.</p>
-  <p id="ffhint" class="hide" style="color:#e8e8e8;font-size:12px">Firefox detected: works, but SONAR is best in Chrome or Samsung Internet. Firefox can play sound very quietly or through the earpiece while the mic is on.</p>
-  <p style="font-size:10px">Silent unless you switch on SONAR (short quiet chirps). If something looks wrong, tap DIAG, then COPY DIAG.</p>
-  <button id="start">START</button>
+<div id="settings" class="sheet hide">
+  <div class="shead"><b>SETTINGS</b><button id="setx">CLOSE</button></div>
+  <label class="sl" for="sFreq">FREQUENCY <span id="fLab">17.5–20.5 kHz</span></label>
+  <input type="range" id="sFreq" min="6000" max="19000" step="250" value="19000">
+  <div class="hint">Right = near-silent (17–20 kHz). If no echoes show, slide left to about 12 kHz (faint ticks). Changes apply on the next ping.</div>
+  <label class="sl" for="sWid">SWEEP WIDTH <span id="wLab">3.0 kHz</span></label>
+  <input type="range" id="sWid" min="2000" max="4000" step="500" value="3000">
+  <label class="sl" for="sVol">VOLUME <span id="vLab">60%</span></label>
+  <input type="range" id="sVol" min="0.1" max="0.9" step="0.05" value="0.6">
+  <div class="hint">Also turn the phone's media volume up.</div>
+  <label class="sl" for="sSens">ECHO SENSITIVITY <span id="eLab">LOW</span></label>
+  <input type="range" id="sSens" min="0" max="2" step="1" value="0">
+  <div class="hint" id="eHint">Fewest false dots: an echo must repeat in 2 of 3 pings.</div>
+  <button id="sReset" style="width:100%;margin-top:12px">RESET TO DEFAULTS</button>
+  <details id="adv"><summary>ADVANCED &#9662;</summary>
+    <canvas id="spec"></canvas>
+    <div class="row"><button id="test">TEST PING</button><button id="cal">CAL</button><button id="front">SET FRONT</button></div>
+    <div class="row"><button id="layP" class="dim">PASSIVE</button><button id="layS" class="on">ECHO</button><button id="night">NIGHT</button></div>
+    <div class="row" id="bands"><button class="on" data-b="0">LOW</button><button class="on" data-b="1">MID</button><button class="on" data-b="2">HIGH</button><button class="on" data-b="3">ULTRA</button></div>
+    <div class="row"><button id="sens">SENS 2</button><button id="clear">CLEAR</button><button id="csv">CSV</button></div>
+    <div class="row"><button id="diag">DIAG</button><button id="saveLast">SAVE LAST</button></div>
+    <div class="hint">START already calibrates, sets FRONT to where you point, and starts the sonar and the recording. PASSIVE shows everyday sounds as a haze (off while the sonar runs).</div>
+    <p id="ffhint" class="hide hint">Firefox: works, but some phones play sound quietly or through the earpiece while the mic is on.</p>
+  </details>
 </div>
+
+<div id="savep" class="sheet hide">
+  <div class="shead"><b>SAVE SESSION</b></div>
+  <div id="saveInfo">--</div>
+  <button class="big" id="svJson">JSON<small>Full data for Grok Bot (echoes, pings, DIAG)</small></button>
+  <button class="big" id="svCsv">CSV<small>Echo list: time, direction, distance</small></button>
+  <button class="big" id="svPng">PNG<small>Picture of the map</small></button>
+  <div class="row" style="margin-top:14px"><button id="svDone">CLOSE</button><button id="svDel">DISCARD</button></div>
+</div>
+
+<div id="diagp" class="hide"><pre id="diagt">collecting…</pre><div class="row"><button id="copyd">COPY DIAG</button><button id="dljson">DOWNLOAD JSON</button><button id="diagx">CLOSE</button></div></div>
+<div id="glfail" class="hide"></div>
+<button id="view" class="hide">3D</button>
+<div id="recb" class="hide">REC</div>
+<button id="upd" class="hide">NEW VERSION AVAILABLE · TAP TO RELOAD</button>
 
 <script>
 window.__fvErr=[];
@@ -120,10 +167,9 @@ setTimeout(function(){ if(!window.__fvLoaded){ var g=document.getElementById('gl
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
 
 window.__fvLoaded = true;
-const VERSION = 'v2.5';
+const VERSION = 'v2.6';
 const IS_FF = /Firefox\//.test(navigator.userAgent);
 document.getElementById('ver').textContent=VERSION;
-if(IS_FF) document.getElementById('ffhint').classList.remove('hide');
 fetch('./version.json?t='+Date.now(),{cache:'no-store'}).then(r=>r.ok?r.json():null).then(j=>{ if(j&&j.version&&j.version!==VERSION){ const b=document.getElementById('upd'); b.classList.remove('hide'); b.onclick=()=>{ const u=new URL(location.href); u.searchParams.set('v',j.version); location.replace(u.toString()); }; } }).catch(()=>{});
 const DEMO = new URLSearchParams(location.search).has('demo');
 const $ = id => document.getElementById(id);
@@ -294,7 +340,7 @@ geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 1e5);
 let head = 0, dirtyFrom = -1, dirtyCount = 0;
 
 const common = {
-  uTime:{value:0}, uFade:{value:FADE}, uSize:{value:1.6*DPR}, uHead:{value:0}, uSweep:{value:0}, uScale:{value:1}, uShowP:{value:1}, uShowS:{value:1}, uGain:{value:1}, uBoost:{value:1.6},
+  uTime:{value:0}, uFade:{value:FADE}, uSize:{value:1.6*DPR}, uHead:{value:0}, uSweep:{value:0}, uScale:{value:1}, uShowP:{value:0}, uShowS:{value:1}, uGain:{value:1}, uBoost:{value:1.6},
 };
 const FRAG = `
 precision highp float;
@@ -568,11 +614,10 @@ const son={on:false,ready:false,ring:null,R:0,latest:-1,pend:[],hist:[],nextT:0,
 son.waves=[]; son.reveal=[]; son.flash=[]; son.clusters=[]; son.log=[];
 son.lat=null; son.latHist=[]; son.noDirect=0;
 const SSENS=[{N:6,cr:0,rel:0.006,rs:0.001,prev:2,oob:4,label:'STRICT'},{N:4,cr:0,rel:0.003,rs:0.0005,prev:1,oob:8,label:'NORMAL'},{N:3,cr:0,rel:0.002,rs:0.0003,prev:0,oob:16,label:'LOOSE'}];
-const SFREQ=[{f0:17500,f1:20500,dur:0.004,vol:1,label:'HIGH'},{f0:10000,f1:14000,dur:0.004,vol:2,label:'MID'},{f0:4000,f1:8000,dur:0.004,vol:1,label:'LOW'}];
-const SVOL=[{g:0.15,l:'LOW'},{g:0.35,l:'MED'},{g:0.6,l:'HIGH'},{g:0.9,l:'MAX'}]; let svIdx=1, svManual=false;
-function applyVol(){ SON.gain=SVOL[svIdx].g; if(son.out) son.out.gain.value=SON.gain; $('svol').textContent='VOL '+SVOL[svIdx].l; }
+const bandLabel=()=>(SON.f0/1000).toFixed(1)+'–'+(SON.f1/1000).toFixed(1)+' kHz', volLabel=()=>Math.round(SON.gain*100)+'%';
+function applyVol(){ if(son.out) son.out.gain.value=SON.gain; }
 son.self={resp:[],n:[],learn:false,lastHdg:null};
-let ssIdx=0, sfIdx=0;
+let ssIdx=0;
 function buildSonar(){ const sr=ac.sampleRate; son.self={resp:[],n:[],learn:false,lastHdg:null}; son.tpls=[0,1,2].map(c=>makeChirp(c,sr)); son.secs=makeBand(sr);
   son.bufs=son.tpls.map(t=>{ const b=ac.createBuffer(1,t.length,sr); b.copyToChannel(t,0); return b; }); if(son.out) son.out.gain.value=SON.gain; }
 function passiveCap(){}
@@ -614,7 +659,7 @@ function handlePing(p,r){
   if(lc!=null){ son.latHist.push(lc); if(son.latHist.length>7) son.latHist.shift();
     if(son.latHist.length>=3){ const m=[...son.latHist].sort((a,b)=>a-b)[son.latHist.length>>1]; if(son.latHist.filter(v=>Math.abs(v-m)<0.01*ac.sampleRate).length>=3) son.lat=m; } }
   if(!r.ok && r.reason.startsWith('no direct')){ son.noDirect++; if(son.lat!=null && son.noDirect>=12){ son.lat=null; son.latHist.length=0; }
-    if(son.noDirect>=8 && sfIdx===0 && !son.autoMid){ son.autoMid=true; son.noDirect=0; $('sfreq').onclick(); msg('This phone did not hear its own 17.5–20.5 kHz chirps, so I switched to MID 10–14 kHz (faint ticks). Try TEST PING.'); } }
+    if(son.noDirect>=8 && SON.f0>=15000 && !son.autoMid){ son.autoMid=true; son.noDirect=0; $('sFreq').value=12000; setBandHz(12000,+$('sWid').value); msg('This phone did not hear its own '+'17–20 kHz chirps, so I moved the frequency to 12 kHz (faint ticks).'); } }
   else son.noDirect=0;
   if(!r.ok){ recPing(p,r,0); st.rej++; st.why=r.reason; st.state=r.reason; son.hist.push({hdg:p.hdg,peaks:[]}); if(son.hist.length>3) son.hist.shift(); return; }
   st.ok++; st.why='';
@@ -677,29 +722,44 @@ function demoSonar(){   // simulated room 4.0 x 4.9 m with a pillar at 075° / 1
   const ox=1.2*Math.sin(75*D2R), oy=1.2*Math.cos(75*D2R), b=dx*ox+dy*oy, c=ox*ox+oy*oy-0.25*0.25, disc=b*b-c; if(disc>0) hits.push(b-Math.sqrt(disc));
   son.st.sent++; son.st.ok++;
   if(rec.active){ const prof=new Float32Array(500); for(let b=0;b<500;b++){ let v=1+Math.random()*1.5; if(b<30) v+=60*Math.exp(-b/6); for(const r of hits){ if(r<=SON.maxR) v+=180*Math.exp(-Math.pow((b*0.01-r)/0.025,2)); } prof[b]=v; }
-    recPing({hdg:h,el:S.elev,code:-1},{ok:true,D:80,dIdx:1934,floor:0.0045,best:Math.max(...prof.slice(25)),thrX:8,oobRatio:1,selfUsed:true,peaks:hits.filter(r=>r>0.3&&r<=SON.maxR).map(r=>({r,snr:180})),profile:prof},hits.length); }
+    recPing({hdg:h,el:S.elev,code:-1},{ok:true,D:80,dIdx:1934,floor:0.0045,best:Math.max(...prof.slice(25)),thrX:8,oobRatio:1,selfUsed:true,peaks:hits.filter(r=>r>0.3&&r<=SON.maxR).map(r=>({r,snr:180,conf:true})),profile:prof},hits.length); }
   const t0=addWave({hdg:h,el:S.elev}); son.st.state='no echo in range'; for(const r of hits){ if(r>0.3&&r<=SON.maxR) queueEcho(h,S.elev,r,0.8,t0); }
 }
-$('sonar').onclick=async()=>{
-  if(!DEMO){
-    if(!ac){ msg('Tap START first'); return; }
+async function setSonar(on){
+  if(on===son.on) return true;
+  if(!DEMO && on){
+    if(!ac){ msg('Tap START first'); return false; }
     try{ if(ac.state!=='running') await ac.resume(); }catch(e){}
-    if(!son.ready){ try{ await sonarInit(); }catch(e){ son.st.state='init failed: '+(e.message||e); msg('Sonar unavailable on this browser: '+(e.message||e)); return; } }
+    if(!son.ready){ try{ await sonarInit(); }catch(e){ son.st.state='init failed: '+(e.message||e); msg('Sonar unavailable on this browser: '+(e.message||e)); return false; } }
   }
-  son.on=!son.on; son.nextT=0; son.pend.length=0; son.hist.length=0;
-  common.uShowP.value=son.on?0:1; $('layP').className=son.on?'dim':'on'; $('bands').classList.toggle('hide',son.on);
-  if(son.on) msg('SONAR on · passive sound haze hidden so only echoes show (tap PASSIVE to bring it back)');
+  son.on=on; son.nextT=0; son.pend.length=0; son.hist.length=0;
+  if(son.on){ common.uShowP.value=0; $('layP').className='dim'; }   // passive haze stays off unless he turns it on in ADVANCED
   passiveCap();   // keep chirps out of the passive layer
-  $('range').classList.toggle('hide',!son.on); $('sonrow').classList.toggle('hide',!son.on); son.st.state=son.on?'starting…':''; resize();
-  $('sonar').textContent='SONAR'; $('sonar').className=son.on?'on':'';
-  if(!son.on) msg('Sonar off. Passive listening only, no sound output.');
-};
-$('ssens').onclick=()=>{ ssIdx=(ssIdx+1)%SSENS.length; const s=SSENS[ssIdx]; SON.N=s.N; SON.codeRatio=s.cr; SON.relMin=s.rel; SON.relMinSelf=s.rs; SON.oobMax=s.oob; son.hist.length=0;
-  $('ssens').textContent='ECHO '+s.label; msg(['STRICT: threshold 6x noise, must repeat in 2 of 3 pings','NORMAL: threshold 4x noise, must repeat in 2 pings in a row','LOOSE: threshold 3x noise, single ping is enough (more false dots)'][ssIdx]); };
-$('sfreq').onclick=()=>{ sfIdx=(sfIdx+1)%SFREQ.length; const f=SFREQ[sfIdx]; SON.f0=f.f0; SON.f1=f.f1; SON.dur=f.dur; if(!svManual) svIdx=f.vol; applyVol();
-  if(son.ready) buildSonar(); son.hist.length=0; son.pend.length=0; son.lat=null; son.latHist.length=0; son.noDirect=0; passiveCap();
-  $('sfreq').textContent='F '+f.label; msg({HIGH:'Chirps 17.5–20.5 kHz: inaudible to most adults, but some phones can\'t play or hear them',MID:'Chirps 10–14 kHz: faint audible ticks, works on more phones',LOW:'Chirps 4–8 kHz: clearly audible ticks, works on almost any phone'}[f.label]); };
-$('svol').onclick=()=>{ svIdx=(svIdx+1)%SVOL.length; svManual=true; applyVol(); son.self={resp:[],n:[],learn:false,lastHdg:null}; msg('Sonar volume '+SVOL[svIdx].l+(svIdx===3?' · also turn the phone\'s MEDIA volume up':'')); };
+  $('range').classList.toggle('hide',!son.on); son.st.state=son.on?'starting…':''; resize();
+  return true;
+}
+function setSens(i){ ssIdx=i; const s=SSENS[i]; SON.N=s.N; SON.codeRatio=s.cr; SON.relMin=s.rel; SON.relMinSelf=s.rs; SON.oobMax=s.oob; son.hist.length=0;
+  $('eLab').textContent=['LOW','MEDIUM','HIGH'][i]; $('eHint').textContent=['Fewest false dots: an echo must repeat in 2 of 3 pings.','An echo must repeat once in the last 2 pings.','Every echo shows at once: more dots, more false ones.'][i]; }
+function setBandHz(c,w){ let f0=Math.max(3000,c-w/2), f1=Math.min(20500,c+w/2); if(f1-f0<w) f0=Math.max(3000,f1-w);
+  if(f0===SON.f0&&f1===SON.f1) return; SON.f0=f0; SON.f1=f1; SON.dur=0.004;
+  if(son.ready) buildSonar(); son.hist.length=0; son.pend.length=0; son.lat=null; son.latHist.length=0; son.noDirect=0;
+  $('fLab').textContent=bandLabel(); $('wLab').textContent=(w/1000).toFixed(1)+' kHz'; }
+const DEF={freq:19000,wid:3000,vol:0.6,sens:0};
+function loadPrefs(){ let p={}; try{ p=JSON.parse(localStorage.getItem('fv-prefs')||'{}'); }catch(e){} return {...DEF,...p}; }
+function savePrefs(){ try{ localStorage.setItem('fv-prefs',JSON.stringify({freq:+$('sFreq').value,wid:+$('sWid').value,vol:+$('sVol').value,sens:+$('sSens').value})); }catch(e){} }
+function applyPrefs(p){ $('sFreq').value=p.freq; $('sWid').value=p.wid; $('sVol').value=p.vol; $('sSens').value=p.sens;
+  setBandHz(p.freq,p.wid); $('fLab').textContent=bandLabel(); $('wLab').textContent=(p.wid/1000).toFixed(1)+' kHz';
+  SON.gain=p.vol; applyVol(); $('vLab').textContent=volLabel(); setSens(p.sens); }
+$('sFreq').oninput=$('sWid').oninput=()=>{ const c=+$('sFreq').value, w=+$('sWid').value; $('fLab').textContent=((Math.max(3000,c-w/2))/1000).toFixed(1)+'–'+(Math.min(20500,c+w/2)/1000).toFixed(1)+' kHz'; $('wLab').textContent=(w/1000).toFixed(1)+' kHz'; };
+$('sFreq').onchange=$('sWid').onchange=()=>{ setBandHz(+$('sFreq').value,+$('sWid').value); savePrefs(); };
+$('sVol').oninput=()=>{ SON.gain=+$('sVol').value; applyVol(); $('vLab').textContent=volLabel(); };
+$('sVol').onchange=()=>{ son.self={resp:[],n:[],learn:false,lastHdg:null}; savePrefs(); };
+$('sSens').oninput=()=>setSens(+$('sSens').value); $('sSens').onchange=savePrefs;
+$('sReset').onclick=()=>{ applyPrefs(DEF); savePrefs(); son.self={resp:[],n:[],learn:false,lastHdg:null}; msg('Settings back to defaults'); };
+applyPrefs(loadPrefs());
+$('gear').onclick=()=>{ $('settings').classList.remove('hide'); $('savep').classList.add('hide'); };
+$('setx').onclick=()=>$('settings').classList.add('hide');
+$('adv').addEventListener('toggle',()=>resize());
 $('test').onclick=()=>testPing();
 const tp={active:false,pend:[],res:[],text:''};
 async function testPing(){
@@ -727,7 +787,7 @@ function testTick(){
   if(pass&&cons){ son.lat=ml; son.latHist=[ml,ml,ml]; son.noDirect=0; }
   const adv = pass ? 'Sonar can work. Sweep slowly at a wall 1–2 m away.' :
     'Turn MEDIA volume up, keep the bottom speaker and mic uncovered, try VOL MAX, then F MID or F LOW'+(IS_FF?'. Firefox may send sound to the earpiece while the mic is on: try Chrome or Samsung Internet':'');
-  tp.text=`phone hears itself: ${med.toFixed(1)}x floor ${pass?'PASS':'FAIL'} · ${pass&&cons?'delay '+(ml/sr*1000).toFixed(0)+' ms (consistent)':pass?'timing inconsistent':'chirp not found'} · ${SFREQ[sfIdx].label} VOL ${SVOL[svIdx].l}`;
+  tp.text=`phone hears itself: ${med.toFixed(1)}x floor ${pass?'PASS':'FAIL'} · ${pass&&cons?'delay '+(ml/sr*1000).toFixed(0)+' ms (consistent)':pass?'timing inconsistent':'chirp not found'} · ${bandLabel()} VOL ${volLabel()}`;
   $('rRange').textContent=pass?'PASS':'FAIL'; $('rWhy').textContent=`hears itself ${med.toFixed(1)}x floor · ${adv}`; msg('TEST PING '+tp.text);
   son.msgT=performance.now()+6000;
 }
@@ -735,7 +795,7 @@ $('layP').onclick=()=>{ common.uShowP.value=common.uShowP.value?0:1; $('layP').c
 $('layS').onclick=()=>{ common.uShowS.value=common.uShowS.value?0:1; $('layS').className=common.uShowS.value?'on':'dim'; };
 
 // ---------- REC: full-scope capture for offline analysis ----------
-const REC_DURS=[5,10,30]; let recDurIdx=1;
+const REC_KEEP_S=600;   // rolling window: keep the last 10 minutes
 const rec={active:false,t0:0,dur:10,frames:[],pings:[],lastF:-1,header:null,json:'',name:''};
 const SPEC_N=64, SPEC_F0=30;
 function specHz(){ const fmax=(ac?ac.sampleRate:48000)/2; return Array.from({length:SPEC_N},(_, i)=>Math.round(SPEC_F0*Math.pow(fmax/SPEC_F0,(i+0.5)/SPEC_N))); }
@@ -749,15 +809,15 @@ function spec64(src){ // src: per-FFT-bin dB array (live) or null (demo)
 const r1=v=>Math.round(v*10)/10, r2=v=>Math.round(v*100)/100, r3=v=>Math.round(v*1000)/1000;
 function recStart(){
   if(rec.active) return;
-  rec.active=true; rec.dur=REC_DURS[recDurIdx]; rec.t0=S.now; rec.frames=[]; rec.pings=[]; rec.lastF=-1; son.self.wantProfile=true;
+  rec.active=true; rec.dur=0; rec.t0=S.now; rec.dropped=0; rec.diagStart=null; setTimeout(()=>{ try{ rec.diagStart=diagText(); }catch(e){} },3000); rec.frames=[]; rec.pings=[]; rec.lastF=-1; son.self.wantProfile=true;
   rec.header=recHeader();
-  $('recb').classList.remove('hide'); $('recp').classList.add('hide'); $('rec').className='on';
+  $('recb').classList.remove('hide');
 }
 function recHeader(){
   return {app:'Field Vision',version:VERSION,demo:DEMO,started:new Date().toISOString(),ua:navigator.userAgent,
     screen:{w:W,h:H,dpr:devicePixelRatio,orientation:screen.orientation?screen.orientation.type:null},
     audio:{state:ac?ac.state:null,sampleRate:ac?ac.sampleRate:48000,baseLatencyMs:ac&&ac.baseLatency!=null?r1(ac.baseLatency*1000):null,channels:S.micCh||null,mic:S.micSettings||null},
-    sonar:{on:son.on,band:SFREQ[sfIdx].label,f0:SON.f0,f1:SON.f1,chirpMs:SON.dur*1000,gain:SON.gain,vol:SVOL[svIdx].l,sens:SSENS[ssIdx].label,N:SON.N,relMin:SON.relMin,relMinSelf:SON.relMinSelf,oobMax:SON.oobMax,
+    sonar:{on:son.on,band:bandLabel(),f0:SON.f0,f1:SON.f1,chirpMs:SON.dur*1000,gain:SON.gain,vol:volLabel(),sens:SSENS[ssIdx].label,N:SON.N,relMin:SON.relMin,relMinSelf:SON.relMinSelf,oobMax:SON.oobMax,
       latencyMs:son.lat!=null&&ac?r1(son.lat/ac.sampleRate*1000):null,selfLearned:son.self.n.map(v=>v||0),test:tp.text||null,maxR:SON.maxR},
     passive:{sens:sensIdx+1,bandsOn:bandOn.slice(),bands:BANDS.map(b=>[b.name,b.lo,b.hi])},
     calibration:{floorDb:floorDb.map(v=>isFinite(v)?r1(v):null),baselineSpec64:binBase&&!isNaN(binBase[10])?spec64(binBase):null},
@@ -775,8 +835,8 @@ function recFrame(){
     else if(DEMO) rms=r1(S.levelDbfs);
     rec.frames.push([r2(t),r1(S.heading*R2D),r1(S.elev*R2D),ori.raw[0]==null?null:r1(ori.raw[0]),ori.raw[1]==null?null:r1(ori.raw[1]),ori.raw[2]==null?null:r1(ori.raw[2]),rms,...S.bandAbove.map(r1),Math.round(S.domHz),spec64(DEMO?null:freq)]);
   }
-  $('recb').textContent='REC '+Math.max(0,Math.ceil(rec.dur-t))+'s…';
-  if(t>=rec.dur) recStop();
+  const z=n=>String(Math.floor(n)).padStart(2,'0'); $('recb').textContent='● REC '+z(t/60)+':'+z(t%60);
+  if(rec.frames.length && t-rec.frames[0][0]>REC_KEEP_S+5){ const cut=t-REC_KEEP_S; const n0=rec.frames.length+rec.pings.length; rec.frames=rec.frames.filter(f=>f[0]>=cut); rec.pings=rec.pings.filter(p=>p.t>=cut); rec.dropped+=n0-rec.frames.length-rec.pings.length; }
 }
 function pingRec(p,r,plotted,withProfile){
   return {t:r2(S.now-(rec.active?rec.t0:0)),code:SON_CODES[p.code]||'SIM',hdg:r1(p.hdg*R2D),elev:r1(p.el*R2D),ok:!!r.ok,reason:r.reason||null,
@@ -796,28 +856,37 @@ function particleSnapshot(){
   return out;
 }
 function recStop(){
-  rec.active=false; son.self.wantProfile=false; $('recb').classList.add('hide'); $('rec').className='';
-  const d=new Date(), z=n=>String(n).padStart(2,'0');
-  rec.name=`field-vision-${d.getFullYear()}${z(d.getMonth()+1)}${z(d.getDate())}-${z(d.getHours())}${z(d.getMinutes())}${z(d.getSeconds())}.json`;
-  const obj={header:{...rec.header,ended:d.toISOString(),durationS:rec.dur,frames:rec.frames.length,pings:rec.pings.length},frames:rec.frames,pings:rec.pings,particles:particleSnapshot()};
-  rec.json=JSON.stringify(obj);
-  const kb=Math.round(rec.json.length/1024);
-  $('rect').textContent=`${rec.name} · ${kb} KB · ${rec.frames.length} frames · ${rec.pings.length} sonar pings · ${obj.particles.length} particles. Send the file to Grok Bot.`;
-  $('reccp').classList.toggle('dim',rec.json.length>600000);
-  $('recp').classList.remove('hide'); recDownload(); msg('Capture saved: '+rec.name);
+  if(!rec.active) return; rec.active=false; son.self.wantProfile=false; $('recb').classList.add('hide');
+  const d=new Date(), z=n=>String(n).padStart(2,'0'); rec.dur=Math.round((S.now-rec.t0)*10)/10;
+  rec.name=`field-vision-${d.getFullYear()}${z(d.getMonth()+1)}${z(d.getDate())}-${z(d.getHours())}${z(d.getMinutes())}${z(d.getSeconds())}`;
+  rec.obj={header:{...rec.header,ended:d.toISOString(),durationS:rec.dur,frames:rec.frames.length,pings:rec.pings.length,rollingKeepS:REC_KEEP_S,droppedOld:rec.dropped,
+      diagStart:rec.diagStart,diagEnd:diagText(),clusters:son.clusters.map(c=>({hdg:r1(c.hdg*R2D),elev:r1(c.el*R2D),r:r3(c.r),n:c.n,t:r2(c.t-rec.t0)}))},
+    frames:rec.frames,pings:rec.pings,particles:particleSnapshot()};
+  rec.frames=[]; rec.pings=[];
 }
-function recDownload(){ if(!rec.json) return;
-  const url=URL.createObjectURL(new Blob([rec.json],{type:'application/json'})), a=document.createElement('a');
-  a.href=url; a.download=rec.name; a.rel='noopener'; a.style.display='none'; document.body.appendChild(a); a.click();   // attached link: Firefox Android needs this
-  setTimeout(()=>{ a.remove(); URL.revokeObjectURL(url); },8000); }
-$('rec').onclick=()=>{ if(rec.active){ recStop(); return; } recStart(); };
-$('recdur').onclick=()=>{ recDurIdx=(recDurIdx+1)%REC_DURS.length; $('recdur').textContent='REC '+REC_DURS[recDurIdx]+' S'; };
-$('recdl').onclick=recDownload;
-$('recx').onclick=()=>$('recp').classList.add('hide');
-$('reccp').onclick=async()=>{ if(rec.json.length>600000){ msg('Too big to copy ('+Math.round(rec.json.length/1024)+' KB): use DOWNLOAD'); return; }
-  try{ await navigator.clipboard.writeText(rec.json); msg('Capture JSON copied'); }
-  catch(e){ const ta=document.createElement('textarea'); ta.value=rec.json; document.body.appendChild(ta); ta.select(); try{ document.execCommand('copy'); msg('Capture JSON copied'); }catch(_){ msg('Copy blocked: use DOWNLOAD'); } ta.remove(); } };
-
+function saveBlob(blob,name){   // anchor attached to the DOM + delayed revoke: needed for Firefox Android downloads
+  const url=URL.createObjectURL(blob), a=document.createElement('a');
+  a.href=url; a.download=name; a.rel='noopener'; a.style.display='none'; document.body.appendChild(a); a.click();
+  setTimeout(()=>{ a.remove(); URL.revokeObjectURL(url); },10000); }
+function openSave(){ const o=rec.obj; if(!o){ msg('Nothing recorded yet'); return; }
+  const echoes=o.pings.reduce((n,p)=>n+(p.peaks||[]).filter(k=>k[2]).length,0), m=Math.floor(o.header.durationS/60), sec=Math.round(o.header.durationS%60);
+  $('saveInfo').textContent=`${rec.name} · ${m} min ${sec} s · ${o.pings.length} pings · ${echoes} confirmed echoes · ${o.header.clusters.length} objects${o.header.droppedOld?' · older than 10 min not kept':''}. Pick a file type (you can save more than one).`;
+  $('svDel').textContent='DISCARD'; delArm=0; $('settings').classList.add('hide'); $('savep').classList.remove('hide'); }
+let delArm=0;
+$('svJson').onclick=()=>{ if(!rec.obj) return; const j=JSON.stringify(rec.obj); saveBlob(new Blob([j],{type:'application/json'}),rec.name+'.json'); msg('Saved '+rec.name+'.json ('+Math.round(j.length/1024)+' KB). Send it to Grok Bot.'); };
+$('svCsv').onclick=()=>{ if(!rec.obj) return; const L=['t_s,heading_deg,elev_deg,range_m,strength_x_floor,confirmed,chirp'];
+  for(const p of rec.obj.pings) for(const k of (p.peaks||[])) L.push([p.t,p.hdg,p.elev,k[0],k[1],k[2]?1:0,p.code].join(','));
+  saveBlob(new Blob([L.join('\n')+'\n'],{type:'text/csv'}),rec.name+'-echoes.csv'); msg('Saved '+rec.name+'-echoes.csv ('+(L.length-1)+' echoes)'); };
+$('svPng').onclick=()=>{ if(!rec.obj) return; try{ const c=snapshotCanvas(); const u=c.toDataURL('image/png'), b=atob(u.split(',')[1]), a=new Uint8Array(b.length); for(let i=0;i<b.length;i++) a[i]=b.charCodeAt(i);
+  saveBlob(new Blob([a],{type:'image/png'}),rec.name+'-map.png'); msg('Saved '+rec.name+'-map.png'); }catch(e){ msg('PNG failed: '+(e.message||e)); } };
+$('svDone').onclick=()=>{ $('savep').classList.add('hide'); msg('Session kept: SETTINGS > ADVANCED > SAVE LAST to save it later'); };
+$('svDel').onclick=()=>{ if(!delArm){ delArm=1; $('svDel').textContent='TAP AGAIN TO DELETE'; return; } rec.obj=null; $('savep').classList.add('hide'); msg('Session discarded'); };
+$('saveLast').onclick=openSave;
+function snapshotCanvas(){   // render a frame now and copy GL + HUD canvases in the same task (WebGL buffer is still valid)
+  renderView(); const g=$('gl'), c=document.createElement('canvas'); c.width=hud.width; c.height=hud.height; const x=c.getContext('2d');
+  x.fillStyle='#000'; x.fillRect(0,0,c.width,c.height); if(renderer) x.drawImage(g,0,0,c.width,c.height); x.drawImage(hud,0,0);
+  x.fillStyle='#bbb'; x.font=(11*DPR)+'px monospace'; x.fillText(`FIELD VISION ${VERSION} · ${S.view==='radar'?'SONAR':'3D'} view · ${bandLabel()}`,10*DPR,H*DPR-28*DPR); x.fillText(rec.name||'',10*DPR,H*DPR-12*DPR);
+  return c; }
 // ---------- CSV log ----------
 const log=[]; let lastLog=0;
 function logRow(){
@@ -852,7 +921,7 @@ function drawRadarHud(){
   const g=hx, Hd=S.heading;
   // rings
   g.lineWidth=1;
-  const showBands=!son.on||common.uShowP.value;
+  const showBands=!!common.uShowP.value;
   if(showBands) for(let i=0;i<BANDS.length;i++){ const r=BANDS[i].r2[1]*RP; g.strokeStyle=i===3?'#3c3c3c':'#232323'; g.beginPath(); g.arc(cx,cy,r,0,7); g.stroke(); }
   g.strokeStyle='#4a4a4a'; g.beginPath(); g.arc(cx,cy,RP*1.03,0,7); g.stroke();
   g.fillStyle='#4d4d4d'; g.font='9px ui-monospace,monospace'; g.textAlign='left';
@@ -891,7 +960,7 @@ function drawRadarHud(){
   if(pi>=0&&pk>3){ const a=(pi*5+2.5)*D2R-Hd, r=RP*0.985; const px=cx+Math.sin(a)*r, py=cy-Math.cos(a)*r;
     g.strokeStyle='#fff'; g.beginPath(); g.arc(px,py,6,0,7); g.stroke(); g.beginPath(); g.arc(px,py,10,0,7); g.globalAlpha=0.35; g.stroke(); g.globalAlpha=1;
     S.peakTxt=`${String(Math.round(pi*5+2.5)).padStart(3,'0')}° +${pk.toFixed(0)}`; } else S.peakTxt='---';
-  if(son.on){ g.setLineDash([2,5]); g.strokeStyle='#3a3a3a'; g.fillStyle='#9a9a9a'; g.font='10px ui-monospace,monospace';
+  if(son.on||son.clusters.length){ g.setLineDash([2,5]); g.strokeStyle='#3a3a3a'; g.fillStyle='#9a9a9a'; g.font='10px ui-monospace,monospace';
     for(let m=0.5;m<=SON.maxR;m+=0.5){ const r=m/SON.maxR*0.98*RP, whole=m%1===0; g.strokeStyle=whole?'#3a3a3a':'#1e1e1e'; g.beginPath(); g.arc(cx,cy,r,0,7); g.stroke(); if(whole) g.fillText(m+' m',cx+r*0.71+12,cy+r*0.71+2); }
     g.setLineDash([]); }
   // Peter
@@ -910,7 +979,7 @@ function draw3DHud(){
     const x=W/2+a/1.2*(W/2-20); g.strokeStyle=d%90?'#444':'#ccc'; g.beginPath(); g.moveTo(x,y-(d%90?3:6)); g.lineTo(x,y+(d%90?3:6)); g.stroke();
     if(d%90===0){ g.fillStyle='#ddd'; g.fillText('NESW'[d/90],x,y+16); } }
   g.fillStyle='#fff'; g.beginPath(); g.moveTo(W/2,y-8); g.lineTo(W/2-5,y-15); g.lineTo(W/2+5,y-15); g.fill();
-  if(son.on){ const v=new THREE.Vector3(); g.fillStyle='#8a8a8a'; g.font='10px ui-monospace,monospace';
+  if(son.on||son.clusters.length){ const v=new THREE.Vector3(); g.fillStyle='#8a8a8a'; g.font='10px ui-monospace,monospace';
     for(let m=1;m<=4;m++){ const r=m/4*2.85, yaw=(S.camYaw??0)+orbit.yaw+Math.PI*0.25; v.set(Math.sin(yaw)*r,0,-Math.cos(yaw)*r).project(cam3);
       if(v.z<1) g.fillText(m+' m',(v.x+1)/2*W,(1-v.y)/2*H); } }
   S.peakTxt = (()=>{ let pk=0,pi=-1; for(let i=0;i<ENV_N;i++) if(env[i]>pk){pk=env[i];pi=i;} return pk>3?`${String(Math.round(pi*5+2.5)).padStart(3,'0')}° +${pk.toFixed(0)}`:'---'; })();
@@ -987,7 +1056,7 @@ $('front').onclick=()=>{
 };
 document.addEventListener('pointerdown',()=>{ if(ac && ac.state!=='running') ac.resume().catch(()=>{}); },true);
 let diagOn=false, diagT=0, tdBuf=null;
-$('diag').onclick=()=>{ diagOn=!diagOn; $('diagp').classList.toggle('hide',!diagOn); $('diag').className=diagOn?'on':''; if(diagOn) updateDiag(); };
+$('diag').onclick=()=>{ $('settings').classList.add('hide'); diagOn=!diagOn; $('diagp').classList.toggle('hide',!diagOn); $('diag').className=diagOn?'on':''; if(diagOn) updateDiag(); };
 function diagText(){
   const f=(v,d=1)=>v==null||!isFinite(v)?'--':(+v).toFixed(d), st=son.st;
   let rms='--'; if(an){ tdBuf=tdBuf||new Float32Array(an.fftSize); an.getFloatTimeDomainData(tdBuf); let s=0; for(const v of tdBuf) s+=v*v; rms=f(10*Math.log10(s/tdBuf.length+1e-20))+' dBFS'; }
@@ -1003,10 +1072,10 @@ function diagText(){
   L.push(`ORIENT raw alpha ${f(ori.raw[0])} beta ${f(ori.raw[1])} gamma ${f(ori.raw[2])} · heading ${f(S.heading*R2D)}° elev ${f(S.elev*R2D)}° · front offset ${f(ori.offset*R2D)}°`);
   L.push(`WEBGL ${glDiag.info}${glDiag.err?' · ERROR '+glDiag.err:''} · view ${S.view} · canvas ${$('gl').width}x${$('gl').height} · fps ${fps}`);
   L.push(`PARTICLES alive ${alive} (echo ${sonAlive}) of ${CAP} · passive ${common.uShowP.value?'shown':'hidden'} · echo ${common.uShowS.value?'shown':'hidden'}`);
-  L.push(`SONAR ${son.on?'ON':'off'} · ready ${son.ready} · ${SFREQ[sfIdx].label} ${SON.f0/1000}-${SON.f1/1000} kHz · gain ${SON.gain} · sens ${SSENS[ssIdx].label}`);
+  L.push(`SONAR ${son.on?'ON':'off'} · ready ${son.ready} · ${bandLabel()} ${SON.f0/1000}-${SON.f1/1000} kHz · gain ${SON.gain} · sens ${SSENS[ssIdx].label}`);
   L.push(`SONAR pings sent ${st.sent} · played ${st.played} · processed ok ${st.ok} rejected ${st.rej} · echoes plotted ${st.echo}`);
   L.push(`SONAR direct-path ${f(st.D,3)} · noise floor ${f(st.floor,4)} · direct/floor ${st.floor?f(st.D/st.floor):'--'}x · best echo ${f(st.best)}x floor (threshold ${f(st.thrX)}x)`);
-  L.push(`SONAR chirp ${SON.dur*1000} ms · VOL ${SVOL[svIdx].l} · self-response ${son.self&&son.self.n.length?son.self.n.map(v=>v||0).join('/'):'0'} pings learned · used ${st.selfUsed} · out-of-band ratio ${f(st.oob)} (limit ${SON.oobMax})`);
+  L.push(`SONAR chirp ${SON.dur*1000} ms · VOL ${volLabel()} · self-response ${son.self&&son.self.n.length?son.self.n.map(v=>v||0).join('/'):'0'} pings learned · used ${st.selfUsed} · out-of-band ratio ${f(st.oob)} (limit ${SON.oobMax})`);
   L.push(`SONAR best echo last 10 pings ${st.bestHist.length?f(Math.max(...st.bestHist)):'--'}x floor · TEST PING ${tp.text||'not run'}`);
   L.push(`SONAR round-trip latency ${son.lat!=null&&ac?f(son.lat/ac.sampleRate*1000)+' ms (locked)':'learning'} · no-direct streak ${son.noDirect}`);
   { const c=st.cnt, tot=k=>c[k]||0, np=st.nPk;
@@ -1027,21 +1096,37 @@ $('copyd').onclick=async()=>{ const t=diagText();
   try{ await navigator.clipboard.writeText(t); msg('Diagnostics copied. Paste them to Grok Bot.'); }
   catch(e){ const ta=document.createElement('textarea'); ta.value=t; document.body.appendChild(ta); ta.select(); try{ document.execCommand('copy'); msg('Diagnostics copied.'); }catch(_){ msg('Copy blocked: long-press the text to select it.'); } ta.remove(); } };
 document.querySelectorAll('#bands button').forEach(b=>b.onclick=()=>{ const i=+b.dataset.b; bandOn[i]=!bandOn[i]; b.className=bandOn[i]?'on':'dim'; });
-$('view').onclick=()=>{ S.view=S.view==='radar'?'3d':'radar'; resize(); S.camYaw=S.heading; $('view').textContent=S.view==='radar'?'3D':'RADAR'; $('mode').textContent=S.view==='radar'?'RADAR · HEADING-UP':'3D · FOLLOW POINTER'; };
+$('view').onclick=()=>{ S.view=S.view==='radar'?'3d':'radar'; resize(); S.camYaw=S.heading; $('view').textContent=S.view==='radar'?'3D':'RADAR'; $('mode').textContent=S.view==='radar'?'SONAR · HEADING-UP':'3D · FOLLOW POINTER'; };
 $('cal').onclick=()=>{ if(DEMO){msg('Demo: floor simulated'); return;} if(an) startCal(); };
 $('sens').onclick=()=>{ sensIdx=(sensIdx+1)%SENS.length; $('sens').textContent='SENS '+(sensIdx+1); msg(['Low sensitivity: only strong sounds','Balanced','High sensitivity: faint sounds too'][sensIdx]); };
 $('clear').onclick=()=>{ clearParticles(); log.length=0; msg('Cleared'); };
 $('csv').onclick=exportCsv;
 
-$('start').onclick=async()=>{
-  $('start').textContent='…'; wake();
+async function ensureAudio(){
+  if(S.running && (DEMO||ac)) return;
   if(!DEMO && !ac){ try{ ac=new (window.AudioContext||window.webkitAudioContext)({latencyHint:'interactive'}); ac.resume(); }catch(e){} }
-  try{
-    if(!DEMO){ await initOrientation(); await initAudio(); }
-    $('overlay').classList.add('hide'); S.running=true;
-    if(!DEMO){ startCal(); setTimeout(()=>{ if(!S.hasOri) msg('No orientation events at all: drag the radar to turn. Tap DIAG for details.'); },2500); }
-  }catch(err){ $('start').textContent='START'; msg('Mic blocked: '+(err.message||err)+'. Allow microphone and retry.'); }
-};
+  if(!DEMO){ await initOrientation(); await initAudio(); }
+  S.running=true;
+}
+let busy=false, session=false;
+$('go').onclick=async()=>{ if(busy) return; busy=true; try{ if(session) await goStop(); else await goStart(); } finally{ busy=false; } };
+async function goStart(){
+  $('go').textContent='…'; wake();
+  try{ await ensureAudio(); }catch(err){ $('go').textContent='START'; msg('Microphone blocked: '+(err.message||err)+'. Allow the microphone and tap START again.'); return; }
+  if(!DEMO){ startCal(); setTimeout(()=>{ if(S.hasOri) $('front').onclick(); else msg('No motion sensor events: drag the map to turn. SETTINGS > ADVANCED > DIAG for details.'); },900); }
+  clearParticles(); son.clusters.length=0; son.flash.length=0; son.waves.length=0; son.reveal.length=0; son.log.length=0;
+  Object.assign(son.st,{sent:0,ok:0,rej:0,echo:0,last:null,lastT:-1e9,cnt:{},nPk:[],cands:[],candT:-1,ok2:0});
+  if(!(await setSonar(true))){ $('go').textContent='START'; return; }
+  recStart(); session=true; $('go').textContent='STOP'; $('go').className='stop'; $('settings').classList.add('hide'); $('savep').classList.add('hide');
+  msg('Recording · sweep slowly, point at walls and objects');
+}
+async function goStop(){
+  recStop(); await setSonar(false); session=false; $('go').textContent='START'; $('go').className=''; openSave();
+}
+function setView(v){ if(S.view!==v) $('view').onclick(); $('vRadar').className=v==='radar'?'on':''; $('v3d').className=v==='3d'?'on':''; }
+$('vRadar').onclick=()=>setView('radar'); $('v3d').onclick=()=>setView('3d');
+$('diagx').onclick=()=>$('diag').onclick();
+if(IS_FF) $('ffhint').classList.remove('hide');
 
 // ---------- loop ----------
 let last=performance.now(), frames=0, fpsT=0, fps=0;
@@ -1058,12 +1143,16 @@ function step(now,dt){
     if(DEMO){ if(son.on) demoSonar(); } else { sonarTick(); testTick(); } revealTick();
     if(son.on && now-son.msgT>250){ son.msgT=now; const st=son.st, fresh=st.last!=null && S.now-st.lastT<2.5;
       $('rRange').textContent = fresh ? st.last.toFixed(2)+' m' : '--';
-      $('rWhy').textContent = fresh ? `${SFREQ[sfIdx].label} · ${SSENS[ssIdx].label}` : (st.state||'waiting for first ping');
-      msg(`SONAR ${DEMO?'(sim) ':''}${SON.f0/1000}–${SON.f1/1000} kHz · pings ${st.sent} · kept ${st.ok} · rejected ${st.rej} · plotted ${st.echo}`); }
+      $('rWhy').textContent = fresh ? `${bandLabel()} · ${SSENS[ssIdx].label}` : (st.state||'waiting for first ping');
+      msg(`${rec.active?'Recording · ':''}${DEMO?'(sim) ':''}${bandLabel()} · pings ${st.sent} · echoes ${st.echo} · objects ${son.clusters.length}`); }
     if(diagOn && now-diagT>250){ diagT=now; updateDiag(); }
     recFrame();
   }
   S.sweep=(S.sweep+dt*2.1)%(Math.PI*2);
+  renderView();
+  readouts();
+}
+function renderView(){
   flushParticles();
   common.uTime.value=S.now; common.uHead.value=S.heading; common.uSweep.value=S.sweep;
   hx.clearRect(0,0,W,H);
@@ -1072,7 +1161,8 @@ function step(now,dt){
   drawSonarFx();
   drawSpectrum();
   if(night){ for(const [c,w,h] of [[hx,W,H],[sx,spec.width,spec.height]]){ c.save(); c.setTransform(1,0,0,1,0,0); c.globalCompositeOperation='destination-out'; c.fillStyle='rgba(0,0,0,0.5)'; c.fillRect(0,0,c.canvas.width,c.canvas.height); c.restore(); } }
-  // readouts
+}
+function readouts(){
   $('rDb').textContent=(S.running?'+'+S.totalAbove.toFixed(1):'--')+' dB';
   $('rHz').textContent=S.domHz?(S.domHz>=1000?(S.domHz/1000).toFixed(2)+' kHz':Math.round(S.domHz)+' Hz'):'-- Hz';
   $('rHdg').textContent=String(Math.round(S.heading*R2D)%360).padStart(3,'0')+'°'+(S.absolute?'':' R');
@@ -1086,8 +1176,8 @@ window.__fv={S,get fps(){return fps}, get alive(){ let n=0; for(let i=0;i<CAP;i+
 resize();
 if(DEMO){
   // pre-fill ~25 s of sweeping so the map is populated immediately
-  S.running=true; $('overlay').classList.add('hide'); msg('DEMO · synthetic sources at 040° voice, 205° hum, 300° whine, 120° traffic');
-  const save=S.t0; son.on=true; $('sonar').className='on'; common.uShowP.value=0; $('layP').className='dim'; $('bands').classList.add('hide'); $('range').classList.remove('hide'); $('sonrow').classList.remove('hide'); resize();
+  S.running=true; msg('DEMO · simulated room. Tap START to record a session.');
+  const save=S.t0; son.on=true; common.uShowP.value=0; $('layP').className='dim'; $('bands').classList.add('hide'); $('range').classList.remove('hide'); resize();
   for(let k=0;k<25*30;k++){ S.now=k/30; demoMotion(); analyse(); emit(1/30); demoSonar(); revealTick(); }
   son.demoNext=0;
   S.t0=performance.now()-25000; flushParticles(); head=head; dirtyFrom=0; dirtyCount=CAP; flushParticles();

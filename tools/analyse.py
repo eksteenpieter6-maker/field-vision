@@ -87,6 +87,14 @@ def summary(h, frames, pings, parts):
             L.append("Candidate fate by range (0.5 m bins): " + "; ".join(
                 f"{b/2:.1f}-{b/2+0.5:.1f} m: " + ",".join(f"{w} {n}" for w, n in Counter(c[2] for c in cand if int(c[0] * 2) == b).most_common())
                 for b in sorted(set(int(c[0] * 2) for c in cand))))
+    cl = h.get("clusters") or []
+    if cl:   # v2.6+: objects (merged echo clusters) at STOP
+        cl = sorted(cl, key=lambda c: -c.get("n", 0))
+        L.append(f"Objects at STOP: {len(cl)}; strongest: " + ", ".join(f"{c['hdg']:.0f}deg {c['r']:.2f} m (x{c['n']})" for c in cl[:8]))
+    if h.get("rollingKeepS") and h.get("droppedOld"):
+        L.append(f"Note: rolling buffer kept the last {h['rollingKeepS']} s; {h['droppedOld']} older frames/pings were dropped")
+    if h.get("diagEnd"):
+        h = dict(h, diagText=h["diagEnd"])
     if h.get("diagText"):
         L.append("--- DIAG at export ---\n" + h["diagText"])
     if parts:
